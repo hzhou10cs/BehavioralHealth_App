@@ -231,3 +231,5 @@ Thumbs.db
 # Local environment overrides
 .env.local
 .env.*.local
+backend_local_tmp/
+backend/backend_local_tmp/
