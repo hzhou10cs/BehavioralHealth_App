@@ -205,3 +205,28 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Node.js dependencies (CRITICAL - large files)
+node_modules/
+frontend/node_modules/
+
+# Next.js build and cache
+.next/
+out/
+.turbo/
+*.tsbuildinfo
+
+# Build outputs
+frontend/build/
+frontend/dist/
+
+# IDE and Editor temporary files
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Local environment overrides
+.env.local
+.env.*.local
