@@ -1,5 +1,6 @@
 import json
 import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -7,7 +8,7 @@ from typing import Any
 class SQLiteHealthChatStore:
     def __init__(self, db_path: str | Path):
         self.db_path = str(db_path)
-        self.conn = sqlite3.connect(self.db_path)
+        self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA foreign_keys = ON;")
 
@@ -20,6 +21,10 @@ class SQLiteHealthChatStore:
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_key TEXT NOT NULL UNIQUE,
+                email TEXT UNIQUE,
+                password_hash TEXT,
+                user_name TEXT,
+                bio TEXT NOT NULL DEFAULT '',
                 goals_json TEXT NOT NULL DEFAULT '{}',
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
@@ -29,6 +34,7 @@ class SQLiteHealthChatStore:
                 user_id INTEGER NOT NULL,
                 title TEXT NOT NULL,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             );
 
@@ -60,11 +66,23 @@ class SQLiteHealthChatStore:
         )
         self.conn.commit()
 
-    def create_user(self, user_key: str, goals: dict[str, Any] | None = None) -> int:
+    def create_user(
+        self,
+        user_key: str,
+        goals: dict[str, Any] | None = None,
+        email: str | None = None,
+        password_hash: str | None = None,
+        user_name: str | None = None,
+        bio: str = "",
+    ) -> int:
         goals = goals or {}
+        resolved_name = user_name or user_key
         cur = self.conn.execute(
-            "INSERT INTO users (user_key, goals_json) VALUES (?, ?)",
-            (user_key, json.dumps(goals)),
+            """
+            INSERT INTO users (user_key, email, password_hash, user_name, bio, goals_json)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (user_key, email, password_hash, resolved_name, bio, json.dumps(goals)),
         )
         self.conn.commit()
         return int(cur.lastrowid)
@@ -73,6 +91,41 @@ class SQLiteHealthChatStore:
         self.conn.execute(
             "UPDATE users SET goals_json = ? WHERE id = ?",
             (json.dumps(goals), user_id),
+        )
+        self.conn.commit()
+
+    def get_user_by_email(self, email: str) -> dict[str, Any] | None:
+        row = self.conn.execute(
+            """
+            SELECT id, user_key, email, password_hash, user_name, bio, goals_json, created_at
+            FROM users
+            WHERE email = ?
+            """,
+            (email,),
+        ).fetchone()
+        return dict(row) if row else None
+
+    def get_user_by_id(self, user_id: int) -> dict[str, Any] | None:
+        row = self.conn.execute(
+            """
+            SELECT id, user_key, email, password_hash, user_name, bio, goals_json, created_at
+            FROM users
+            WHERE id = ?
+            """,
+            (user_id,),
+        ).fetchone()
+        return dict(row) if row else None
+
+    def update_user_profile(
+        self, user_id: int, user_name: str, bio: str, goals: dict[str, Any]
+    ) -> None:
+        self.conn.execute(
+            """
+            UPDATE users
+            SET user_name = ?, bio = ?, goals_json = ?
+            WHERE id = ?
+            """,
+            (user_name, bio, json.dumps(goals), user_id),
         )
         self.conn.commit()
 
@@ -101,6 +154,11 @@ class SQLiteHealthChatStore:
                 "INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)",
                 (conversation_id, role, content, created_at),
             )
+
+        self.conn.execute(
+            "UPDATE conversations SET updated_at = ? WHERE id = ?",
+            (datetime.now(timezone.utc).isoformat(), conversation_id),
+        )
         self.conn.commit()
         return int(cur.lastrowid)
 
@@ -136,9 +194,25 @@ class SQLiteHealthChatStore:
         self.conn.commit()
         return int(cur.lastrowid)
 
+    def get_conversation(self, conversation_id: int) -> dict[str, Any] | None:
+        row = self.conn.execute(
+            """
+            SELECT id, user_id, title, created_at, updated_at
+            FROM conversations
+            WHERE id = ?
+            """,
+            (conversation_id,),
+        ).fetchone()
+        return dict(row) if row else None
+
     def list_conversations_for_user(self, user_id: int) -> list[dict[str, Any]]:
         rows = self.conn.execute(
-            "SELECT id, user_id, title, created_at FROM conversations WHERE user_id = ? ORDER BY id ASC",
+            """
+            SELECT id, user_id, title, created_at, updated_at
+            FROM conversations
+            WHERE user_id = ?
+            ORDER BY datetime(updated_at) DESC, id DESC
+            """,
             (user_id,),
         ).fetchall()
         return [dict(row) for row in rows]

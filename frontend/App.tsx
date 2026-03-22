@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -16,24 +16,33 @@ import ChatHistoryList from "./components/ChatHistoryList";
 import Input from "./components/Input";
 import MessageBubble from "./components/MessageBubble";
 import {
+  createConversation,
   fetchChatHistory,
   fetchMessages,
+  fetchProfile,
   login,
   sendMessage,
+  signUp,
+  updateProfile,
   type ChatMessage,
-  type ChatSession
+  type ChatSession,
+  type Profile
 } from "./lib/api";
 
-type Screen = "login" | "chat" | "history";
+type Screen = "login" | "signup" | "home" | "chat" | "history" | "profile";
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>("login");
-  const [userName, setUserName] = useState<string>("");
+  const [token, setToken] = useState("");
+  const [userName, setUserName] = useState("");
 
   const title = useMemo(() => {
-    if (screen === "chat") return "Therapy Chat";
+    if (screen === "signup") return "Create Account";
+    if (screen === "home") return "Home";
+    if (screen === "chat") return "Chat";
     if (screen === "history") return "Chat History";
-    return "Behavioral Health Login";
+    if (screen === "profile") return "Update Profile";
+    return "Log In";
   }, [screen]);
 
   return (
@@ -44,79 +53,92 @@ export default function App() {
         style={styles.flex}
       >
         <View style={styles.container}>
-          <Text style={styles.appHeading}>BehavioralHealth App</Text>
+          <Text style={styles.appHeading}>BehavioralHealth Demo</Text>
           <Text style={styles.subHeading}>{title}</Text>
-
-          <View style={styles.navRow}>
-            <NavButton label="Login" isActive={screen === "login"} onPress={() => setScreen("login")} />
-            <NavButton label="Chat" isActive={screen === "chat"} onPress={() => setScreen("chat")} />
-            <NavButton
-              label="History"
-              isActive={screen === "history"}
-              onPress={() => setScreen("history")}
-            />
-          </View>
 
           {screen === "login" ? (
             <LoginScreen
-              onLoggedIn={(name) => {
+              onSuccess={(nextToken, name) => {
+                setToken(nextToken);
                 setUserName(name);
-                setScreen("chat");
+                setScreen("home");
+              }}
+              onGoSignUp={() => setScreen("signup")}
+            />
+          ) : null}
+
+          {screen === "signup" ? (
+            <SignUpScreen
+              onSuccess={(nextToken, name) => {
+                setToken(nextToken);
+                setUserName(name);
+                setScreen("home");
+              }}
+              onGoLogin={() => setScreen("login")}
+            />
+          ) : null}
+
+          {screen === "home" ? (
+            <HomeScreen
+              userName={userName}
+              onOpenChat={() => setScreen("chat")}
+              onOpenHistory={() => setScreen("history")}
+              onOpenProfile={() => setScreen("profile")}
+              onLogout={() => {
+                setToken("");
+                setUserName("");
+                setScreen("login");
               }}
             />
           ) : null}
 
-          {screen === "chat" ? <ChatScreen userName={userName} /> : null}
-          {screen === "history" ? <HistoryScreen /> : null}
+          {screen === "chat" ? (
+            <ChatScreen token={token} userName={userName} onBack={() => setScreen("home")} />
+          ) : null}
+
+          {screen === "history" ? <HistoryScreen token={token} onBack={() => setScreen("home")} /> : null}
+
+          {screen === "profile" ? (
+            <ProfileScreen
+              token={token}
+              onBack={() => setScreen("home")}
+              onUpdated={(name) => setUserName(name)}
+            />
+          ) : null}
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
-function NavButton({
-  label,
-  isActive,
-  onPress
+function LoginScreen({
+  onSuccess,
+  onGoSignUp
 }: {
-  label: string;
-  isActive: boolean;
-  onPress: () => void;
+  onSuccess: (token: string, userName: string) => void;
+  onGoSignUp: () => void;
 }) {
-  return (
-    <Pressable onPress={onPress} style={[styles.navButton, isActive && styles.navButtonActive]}>
-      <Text style={[styles.navText, isActive && styles.navTextActive]}>{label}</Text>
-    </Pressable>
-  );
-}
-
-function LoginScreen({ onLoggedIn }: { onLoggedIn: (userName: string) => void }) {
   const [email, setEmail] = useState("demo@health.app");
   const [password, setPassword] = useState("password123");
   const [status, setStatus] = useState("");
-  const [loading, setLoading] = useState(false);
 
   async function handleLogin() {
     if (!email.trim() || !password.trim()) {
-      setStatus("Email and password are required");
+      setStatus("Email and password are required.");
       return;
     }
 
     try {
-      setLoading(true);
       setStatus("Signing in...");
       const result = await login({ email, password });
-      setStatus(`Welcome, ${result.userName}`);
-      onLoggedIn(result.userName);
-    } catch {
-      setStatus("Unable to sign in (demo password is password123)");
-    } finally {
-      setLoading(false);
+      onSuccess(result.token, result.userName);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Unable to sign in.");
     }
   }
 
   return (
-    <Card title="Behavioral Health Login">
+    <Card title="Log In">
       <Input
         label="Email"
         autoCapitalize="none"
@@ -125,52 +147,144 @@ function LoginScreen({ onLoggedIn }: { onLoggedIn: (userName: string) => void })
         value={email}
         onChangeText={setEmail}
       />
-      <Input
-        label="Password"
-        secureTextEntry
-        value={password}
-        onChangeText={setPassword}
-      />
-      <Button onPress={handleLogin} disabled={loading}>
-        {loading ? "Signing In..." : "Log In"}
-      </Button>
-      <Text style={styles.statusText}>{status}</Text>
+      <Input label="Password" secureTextEntry value={password} onChangeText={setPassword} />
+      <Button onPress={handleLogin}>Log In</Button>
+      <Pressable onPress={onGoSignUp}>
+        <Text style={styles.linkText}>Need an account? Sign up</Text>
+      </Pressable>
+      {status ? <Text style={styles.statusText}>{status}</Text> : null}
     </Card>
   );
 }
 
-function ChatScreen({ userName }: { userName: string }) {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [draft, setDraft] = useState("");
-  const [status, setStatus] = useState("Loading messages...");
+function SignUpScreen({
+  onSuccess,
+  onGoLogin
+}: {
+  onSuccess: (token: string, userName: string) => void;
+  onGoLogin: () => void;
+}) {
+  const [userName, setUserName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [status, setStatus] = useState("");
 
-  useEffect(() => {
-    let mounted = true;
-
-    fetchMessages()
-      .then((data) => {
-        if (!mounted) return;
-        setMessages(data);
-        setStatus("");
-      })
-      .catch(() => {
-        if (!mounted) return;
-        setStatus("Could not load messages");
-      });
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  async function onSend() {
-    if (!draft.trim()) {
+  async function handleSignUp() {
+    if (!userName.trim() || !email.trim() || !password.trim()) {
+      setStatus("Name, email, and password are required.");
       return;
     }
 
     try {
-      const created = await sendMessage(draft.trim());
-      setMessages((prev) => [...prev, created]);
+      setStatus("Creating account...");
+      console.log("here")
+      const result = await signUp({ userName, email, password });
+      onSuccess(result.token, result.userName);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Could not create account.");
+    }
+  }
+
+  return (
+    <Card title="Create Account">
+      <Input label="Name" value={userName} onChangeText={setUserName} />
+      <Input
+        label="Email"
+        autoCapitalize="none"
+        autoCorrect={false}
+        keyboardType="email-address"
+        value={email}
+        onChangeText={setEmail}
+      />
+      <Input label="Password" secureTextEntry value={password} onChangeText={setPassword} />
+      <Button onPress={handleSignUp}>Sign Up</Button>
+      <Pressable onPress={onGoLogin}>
+        <Text style={styles.linkText}>Already have an account? Log in</Text>
+      </Pressable>
+      {status ? <Text style={styles.statusText}>{status}</Text> : null}
+    </Card>
+  );
+}
+
+function HomeScreen({
+  userName,
+  onOpenChat,
+  onOpenHistory,
+  onOpenProfile,
+  onLogout
+}: {
+  userName: string;
+  onOpenChat: () => void;
+  onOpenHistory: () => void;
+  onOpenProfile: () => void;
+  onLogout: () => void;
+}) {
+  return (
+    <Card title="Home">
+      <Text style={styles.welcome}>Welcome, {userName || "there"}</Text>
+      <Button onPress={onOpenChat}>Open Chat</Button>
+      <Button onPress={onOpenHistory}>View Chat History</Button>
+      <Button onPress={onOpenProfile}>Update Profile</Button>
+      <Button onPress={onLogout}>Log Out</Button>
+    </Card>
+  );
+}
+
+function ChatScreen({
+  token,
+  userName,
+  onBack
+}: {
+  token: string;
+  userName: string;
+  onBack: () => void;
+}) {
+  const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [conversationId, setConversationId] = useState<number | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [draft, setDraft] = useState("");
+  const [status, setStatus] = useState("Loading conversations...");
+
+  const loadConversations = useCallback(async () => {
+    const history = await fetchChatHistory(token);
+    setSessions(history);
+    if (history.length > 0) {
+      setConversationId(history[0].id);
+      return history[0].id;
+    }
+    const created = await createConversation(token, "My First Session");
+    setSessions([created]);
+    setConversationId(created.id);
+    return created.id;
+  }, [token]);
+
+  useEffect(() => {
+    let active = true;
+
+    loadConversations()
+      .then((id) => fetchMessages(token, id))
+      .then((items) => {
+        if (!active) return;
+        setMessages(items);
+        setStatus("");
+      })
+      .catch(() => {
+        if (!active) return;
+        setStatus("Could not load chat data");
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [loadConversations, token]);
+
+  async function onSend() {
+    if (!draft.trim() || !conversationId) return;
+
+    try {
+      await sendMessage(token, conversationId, draft.trim());
+      const next = await fetchMessages(token, conversationId);
+      setMessages(next);
       setDraft("");
       setStatus("");
     } catch {
@@ -179,7 +293,8 @@ function ChatScreen({ userName }: { userName: string }) {
   }
 
   return (
-    <Card title={userName ? `Therapy Chat (${userName})` : "Therapy Chat"}>
+    <Card title={userName ? `Chat (${userName})` : "Chat"}>
+      <Button onPress={onBack}>Back To Home</Button>
       {status ? <Text style={styles.statusText}>{status}</Text> : null}
       <ScrollView style={styles.messagesWrap} contentContainerStyle={styles.messagesContent}>
         {messages.map((message) => (
@@ -192,33 +307,106 @@ function ChatScreen({ userName }: { userName: string }) {
   );
 }
 
-function HistoryScreen() {
+function HistoryScreen({ token, onBack }: { token: string; onBack: () => void }) {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [status, setStatus] = useState("Loading history...");
 
   useEffect(() => {
-    let mounted = true;
+    let active = true;
 
-    fetchChatHistory()
+    fetchChatHistory(token)
       .then((items) => {
-        if (!mounted) return;
+        if (!active) return;
         setSessions(items);
         setStatus("");
       })
       .catch(() => {
-        if (!mounted) return;
-        setStatus("Could not load chat history");
+        if (!active) return;
+        setStatus("Could not load history");
       });
 
     return () => {
-      mounted = false;
+      active = false;
     };
-  }, []);
+  }, [token]);
 
   return (
     <Card title="Chat History">
+      <Button onPress={onBack}>Back To Home</Button>
       {status ? <Text style={styles.statusText}>{status}</Text> : null}
       <ChatHistoryList sessions={sessions} />
+    </Card>
+  );
+}
+
+function ProfileScreen({
+  token,
+  onBack,
+  onUpdated
+}: {
+  token: string;
+  onBack: () => void;
+  onUpdated: (name: string) => void;
+}) {
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [userName, setUserName] = useState("");
+  const [bio, setBio] = useState("");
+  const [goalsJson, setGoalsJson] = useState("{}");
+  const [status, setStatus] = useState("Loading profile...");
+
+  useEffect(() => {
+    let active = true;
+
+    fetchProfile(token)
+      .then((data) => {
+        if (!active) return;
+        setProfile(data);
+        setUserName(data.userName);
+        setBio(data.bio ?? "");
+        setGoalsJson(JSON.stringify(data.goals ?? {}, null, 2));
+        setStatus("");
+      })
+      .catch(() => {
+        if (!active) return;
+        setStatus("Could not load profile");
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [token]);
+
+  async function onSave() {
+    try {
+      const parsedGoals = JSON.parse(goalsJson || "{}");
+      const updated = await updateProfile(token, {
+        userName,
+        bio,
+        goals: parsedGoals
+      });
+      setProfile(updated);
+      onUpdated(updated.userName);
+      setStatus("Profile saved");
+    } catch {
+      setStatus("Save failed. Ensure goals is valid JSON.");
+    }
+  }
+
+  return (
+    <Card title="Update Profile">
+      <Button onPress={onBack}>Back To Home</Button>
+      <Text style={styles.metaText}>Email: {profile?.email ?? "-"}</Text>
+      <Input label="Name" value={userName} onChangeText={setUserName} />
+      <Input label="Bio" value={bio} onChangeText={setBio} multiline numberOfLines={3} />
+      <Input
+        label="Goals (JSON)"
+        value={goalsJson}
+        onChangeText={setGoalsJson}
+        multiline
+        numberOfLines={4}
+      />
+      <Button onPress={onSave}>Save Profile</Button>
+      {status ? <Text style={styles.statusText}>{status}</Text> : null}
     </Card>
   );
 }
@@ -248,29 +436,16 @@ const styles = StyleSheet.create({
     marginTop: -4,
     marginBottom: 6
   },
-  navRow: {
-    flexDirection: "row",
-    gap: 8,
-    marginBottom: 6
-  },
-  navButton: {
-    borderWidth: 1,
-    borderColor: "#bfdbfe",
-    borderRadius: 999,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    backgroundColor: "#eff6ff"
-  },
-  navButtonActive: {
-    backgroundColor: "#2563eb",
-    borderColor: "#2563eb"
-  },
-  navText: {
-    color: "#1e3a8a",
+  welcome: {
+    color: "#0f172a",
     fontWeight: "600"
   },
-  navTextActive: {
-    color: "#ffffff"
+  linkText: {
+    color: "#1d4ed8",
+    fontWeight: "600"
+  },
+  metaText: {
+    color: "#334155"
   },
   statusText: {
     color: "#334155"

@@ -8,6 +8,8 @@ class Settings(BaseSettings):
     debug: bool = True
     api_prefix: str = ""
     auth_token: str = "demo-token"
+    db_path: str = "backend_local_tmp/app_demo.sqlite3"
+    cors_allow_origins: str = "*"
 
     model_config = SettingsConfigDict(
         env_prefix="BHA_",
