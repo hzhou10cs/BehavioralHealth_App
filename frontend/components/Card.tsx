@@ -1,4 +1,5 @@
 import type { PropsWithChildren } from "react";
+import { StyleSheet, Text, View } from "react-native";
 
 type CardProps = PropsWithChildren<{
   title: string;
@@ -6,16 +7,25 @@ type CardProps = PropsWithChildren<{
 
 export default function Card({ title, children }: CardProps) {
   return (
-    <section
-      style={{
-        background: "#ffffff",
-        border: "1px solid #e5e7eb",
-        borderRadius: "12px",
-        padding: "1rem"
-      }}
-    >
-      <h2 style={{ marginTop: 0, marginBottom: "0.8rem" }}>{title}</h2>
+    <View style={styles.card}>
+      <Text style={styles.title}>{title}</Text>
       {children}
-    </section>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  card: {
+    backgroundColor: "#ffffff",
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    gap: 10
+  },
+  title: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: "#0f172a"
+  }
+});

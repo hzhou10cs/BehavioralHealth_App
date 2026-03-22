@@ -1,29 +1,40 @@
 # BehavioralHealth App
 
-Behavioral health web app with:
-- Next.js frontend (`login`, `chat`, `chat-history`) + Jest component tests
-- FastAPI backend (auth, conversations, messages, history) + pytest API tests
+Behavioral health app with:
+- Expo SDK 54 + React Native frontend (`login`, `chat`, `chat-history`) for Android and iOS
+- FastAPI backend (auth, conversations, messages, history)
 - Standalone SQLite persistence unit + pytest tests (schema, FK checks, ordered history)
 
-## Runbook Phase 1
+## Prerequisites
+- Node.js LTS (recommended: 20.x)
+- npm
+- Python 3.11+ (backend tested with 3.13)
+- iPhone with **Expo Go** installed
 
-### 1) Prerequisites
-- Node.js + npm
-- Python 3.11+ (tested with 3.13)
-
-### 2) Frontend setup and run
+## Frontend Setup (Expo)
 ```bash
 cd frontend
 npm install
-npm run dev
+npm run start
 ```
 
-Open:
-- `http://localhost:3000/login`
-- `http://localhost:3000/chat`
-- `http://localhost:3000/chat-history`
+When Expo starts, keep the terminal running.
 
-### 3) Backend setup and run
+### Test On iPhone (Windows development machine)
+1. Make sure your Windows machine and iPhone have internet access.
+2. Install **Expo Go** from the iOS App Store.
+3. In `frontend`, run:
+```bash
+npm run start -- --tunnel
+```
+4. In the Expo terminal UI, scan the QR code with your iPhone Camera (or from Expo Go).
+5. The app opens in Expo Go. You can switch between **Login**, **Chat**, and **History** using the top tabs.
+
+Notes:
+- `--tunnel` is the most reliable option from Windows to iPhone when local LAN discovery is flaky.
+- Default demo login password is `password123`.
+
+## Backend Setup and Run
 ```bash
 cd backend
 python -m venv .venv
@@ -36,28 +47,7 @@ uvicorn app.main:app --reload
 Health endpoint:
 - `http://127.0.0.1:8000/health`
 
-### 4) Data storage behavior
-- Current FastAPI routes use in-memory store (`app/store.py`) by default.
-- SQLite persistence is implemented as standalone unit in `backend/app/sqlite_persistence.py`.
-- SQLite unit also supports exporting per-user folder structure:
-  - `chats/`
-  - `coach_state_tracker/`
-  - `session_report/`
-  - `goals.json`
-
-## Testing
-
-### Frontend tests (Jest)
-```bash
-cd frontend
-npx jest --runInBand --ci
-```
-
-Expected successful output includes:
-- `Test Suites: 4 passed, 4 total`
-- `Tests: 5 passed, 5 total`
-
-### Backend tests (pytest)
+## Backend Testing
 ```bash
 cd backend
 source .venv/Scripts/activate
@@ -67,24 +57,6 @@ python -m pytest -q
 Expected successful output includes:
 - `11 passed`
 
-Note:
-- A non-blocking pytest cache warning may appear on some Windows environments (`.pytest_cache` permission). Tests can still pass.
-
-## Test Coverage Summary
-- Frontend:
-  - Login submit flow with mocked API
-  - Chat load/send flow with mocked API
-  - Chat history rendering with mocked API
-  - Reusable component behavior
-- Backend FastAPI:
-  - Auth success/failure
-  - Conversation create/list
-  - Message submit/history retrieval
-  - 404 behavior for unknown conversation
-  - Environment-based settings
-- SQLite unit:
-  - Schema creation validation
-  - Insert/query validation
-  - Ordered chat-history retrieval
-  - Foreign-key constraint checks
-  - Export layout check for health-chat user bundle
+## Project Notes
+- The mobile frontend currently uses a local mock data layer in `frontend/lib/api.ts` for login/messages/history flows.
+- Backend API implementation remains available in `backend/app/main.py`.

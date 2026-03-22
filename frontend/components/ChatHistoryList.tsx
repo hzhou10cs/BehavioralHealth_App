@@ -1,4 +1,5 @@
-import type { ChatSession } from "@/lib/api";
+import { StyleSheet, Text, View } from "react-native";
+import type { ChatSession } from "../lib/api";
 
 type ChatHistoryListProps = {
   sessions: ChatSession[];
@@ -6,32 +7,43 @@ type ChatHistoryListProps = {
 
 export default function ChatHistoryList({ sessions }: ChatHistoryListProps) {
   if (!sessions.length) {
-    return <p>No sessions found.</p>;
+    return <Text style={styles.empty}>No sessions found.</Text>;
   }
 
   return (
-    <ul style={{ paddingLeft: 0 }}>
+    <View style={styles.list}>
       {sessions.map((session) => (
-        <li
-          key={session.id}
-          style={{
-            listStyle: "none",
-            border: "1px solid #e5e7eb",
-            borderRadius: "10px",
-            padding: "0.7rem",
-            marginBottom: "0.6rem",
-            background: "#ffffff"
-          }}
-        >
-          <strong>{session.title}</strong>
-          <div>
-            <small>
-              Last updated:{" "}
-              {new Date(session.updatedAt).toLocaleDateString("en-US")}
-            </small>
-          </div>
-        </li>
+        <View key={session.id} style={styles.item}>
+          <Text style={styles.title}>{session.title}</Text>
+          <Text style={styles.date}>
+            Last updated: {new Date(session.updatedAt).toLocaleDateString("en-US")}
+          </Text>
+        </View>
       ))}
-    </ul>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  empty: {
+    color: "#475569"
+  },
+  list: {
+    gap: 10
+  },
+  item: {
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    borderRadius: 12,
+    padding: 12,
+    backgroundColor: "#ffffff",
+    gap: 4
+  },
+  title: {
+    fontWeight: "700",
+    color: "#0f172a"
+  },
+  date: {
+    color: "#475569"
+  }
+});

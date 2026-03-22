@@ -1,22 +1,52 @@
-import type { ButtonHTMLAttributes, PropsWithChildren } from "react";
+import type { PropsWithChildren } from "react";
+import { Pressable, StyleSheet, Text } from "react-native";
 
-type ButtonProps = PropsWithChildren<ButtonHTMLAttributes<HTMLButtonElement>>;
+type ButtonProps = PropsWithChildren<{
+  onPress?: () => void;
+  disabled?: boolean;
+  accessibilityLabel?: string;
+}>;
 
-export default function Button({ children, ...props }: ButtonProps) {
+export default function Button({
+  children,
+  onPress,
+  disabled = false,
+  accessibilityLabel
+}: ButtonProps) {
   return (
-    <button
-      style={{
-        background: "#2563eb",
-        color: "#ffffff",
-        border: "none",
-        borderRadius: "8px",
-        padding: "0.6rem 1rem",
-        cursor: "pointer",
-        fontWeight: 600
-      }}
-      {...props}
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      disabled={disabled}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.button,
+        disabled && styles.disabledButton,
+        pressed && !disabled && styles.pressedButton
+      ]}
     >
-      {children}
-    </button>
+      <Text style={styles.text}>{children}</Text>
+    </Pressable>
   );
 }
+
+const styles = StyleSheet.create({
+  button: {
+    backgroundColor: "#2563eb",
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    alignItems: "center"
+  },
+  pressedButton: {
+    opacity: 0.86
+  },
+  disabledButton: {
+    backgroundColor: "#93c5fd"
+  },
+  text: {
+    color: "#ffffff",
+    fontWeight: "700",
+    fontSize: 16
+  }
+});
