@@ -378,17 +378,40 @@ function ProfileScreen({
 
   async function onSave() {
     try {
-      const parsedGoals = JSON.parse(goalsJson || "{}");
+      const rawGoals = goalsJson.trim();
+      let parsedGoals: unknown;
+
+      try {
+        parsedGoals = rawGoals ? JSON.parse(rawGoals) : {};
+      } catch {
+        // Allow plain text goals and coerce to a dictionary expected by backend.
+        parsedGoals = { primary: rawGoals };
+      }
+
+      let normalizedGoals: Record<string, string>;
+      if (typeof parsedGoals === "string") {
+        normalizedGoals = { primary: parsedGoals };
+      } else if (parsedGoals && typeof parsedGoals === "object" && !Array.isArray(parsedGoals)) {
+        normalizedGoals = Object.fromEntries(
+          Object.entries(parsedGoals as Record<string, unknown>).map(([key, value]) => [
+            key,
+            typeof value === "string" ? value : JSON.stringify(value)
+          ])
+        );
+      } else {
+        throw new Error("Goals must be a JSON object or plain text.");
+      }
+
       const updated = await updateProfile(token, {
         userName,
         bio,
-        goals: parsedGoals
+        goals: normalizedGoals
       });
       setProfile(updated);
       onUpdated(updated.userName);
       setStatus("Profile saved");
-    } catch {
-      setStatus("Save failed. Ensure goals is valid JSON.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Save failed.");
     }
   }
 
