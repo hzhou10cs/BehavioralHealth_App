@@ -11,6 +11,8 @@ The app currently supports:
 - sending messages
 - generating an assistant reply from the backend
 - viewing chat history
+- tracking coach state from conversation updates
+- generating session report memory for later assistant replies
 
 ## Tech Stack
 - Frontend: Expo SDK 54, React Native, TypeScript
@@ -49,6 +51,9 @@ Important files:
 - `frontend/lib/api.ts`: frontend API client
 - `backend/app/main.py`: backend API routes
 - `backend/app/assistant_agent.py`: backend assistant reply logic
+- `backend/app/services/chatbox/chat_agent.py`: migrated chat-agent service layer
+- `backend/app/services/chatbox/extractor_agent.py`: migrated extractor and session report logic
+- `backend/app/services/chatbox/state_tracker.py`: migrated coach-state tracker logic
 
 ## Backend Setup
 
@@ -87,6 +92,11 @@ macOS / Linux / Git Bash:
 ```bash
 cp .env.example .env
 ```
+
+The backend `.env` file also controls the migrated chat-agent service.
+By default, `BHA_ASSISTANT_TEST_MODE=true`, which keeps the assistant in a
+safe local stub mode. If you later want to connect a real OpenAI-compatible
+LLM service, update the `BHA_ASSISTANT_*` values in `backend/.env`.
 
 ## Run The Backend
 
@@ -184,8 +194,21 @@ This starts Expo. Keep that terminal open while you use the app.
 
 1. Make sure your phone and computer are on the same Wi-Fi network.
 2. Install **Expo Go** on your phone.
-3. Start the backend with `--host 0.0.0.0`.
-4. Start the frontend with `npm run start`.
+3. Start the backend in PowerShell:
+
+```powershell
+cd backend
+.\.venv\Scripts\Activate.ps1
+python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+4. In a second PowerShell window, start the frontend:
+
+```powershell
+cd frontend
+npm run start
+```
+
 5. Scan the Expo QR code with your phone.
 
 If Expo LAN mode fails on your network, try:
@@ -196,30 +219,35 @@ npm run start -- --tunnel
 
 ## Development Login
 
-The current development login is:
+Example development login to use in the app:
 - email: `alex@example.com`
 - password: `password123`
 
-The backend currently checks the password in code, so `password123` must be used unless that logic is changed.
+The backend currently accepts any email address and only checks the password in
+code. The part of the email before `@` is used as the displayed username. That
+means `password123` must be used unless the login logic is changed.
 
 ## Running Automated Tests
 
-## Backend Tests
+### Backend Tests
 
-From the `backend` folder with the virtual environment activated:
+From the repo root in Windows PowerShell:
 
 ```powershell
+cd backend
+.\.venv\Scripts\Activate.ps1
 python -m pytest -q
 ```
 
-Expected result:
-- `13 passed`
+Current expected result:
+- `22 passed`
 
-## Frontend Tests
+### Frontend Tests
 
-From the `frontend` folder:
+From the repo root in Windows PowerShell:
 
 ```powershell
+cd frontend
 npm test
 ```
 
@@ -228,11 +256,12 @@ These tests verify that:
 - backend responses are mapped into frontend data correctly
 - the app UI updates after login, sending a message, and opening history
 
-## Frontend Type Check
+### Frontend Type Check
 
-From the `frontend` folder:
+From the repo root in Windows PowerShell:
 
 ```powershell
+cd frontend
 npm run typecheck
 ```
 
@@ -283,3 +312,92 @@ If you are new to this stack, use this order:
 - The frontend communicates with the backend through `frontend/lib/api.ts`.
 - The backend assistant reply route is `POST /conversations/{conversation_id}/assistant-reply`.
 - Backend routes are defined in `backend/app/main.py`.
+- The assistant reply route now uses a migrated chat-agent service under `backend/app/services/chatbox/`.
+- The backend also runs a migrated extractor/state-tracker flow when assistant replies are generated.
+- Session report memory is now stored and reused in later assistant replies.
+- Debug inspection routes are also available:
+  - `GET /conversations/{conversation_id}/coach-state`
+  - `GET /conversations/{conversation_id}/session-reports`
+
+## Swagger Debug Walkthrough
+
+You can inspect the migrated backend state directly in Swagger.
+
+1. Start the backend:
+
+```powershell
+cd backend
+.\.venv\Scripts\Activate.ps1
+python -m uvicorn app.main:app --reload
+```
+
+2. Open:
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+3. Create a conversation with `POST /conversations`:
+
+```json
+{
+  "title": "Debug Test Session"
+}
+```
+
+4. Copy the returned conversation ID, such as `conv-1`.
+
+5. Send a user message with `POST /conversations/{conversation_id}/messages`:
+
+```json
+{
+  "role": "user",
+  "content": "I am too tired after work to exercise."
+}
+```
+
+6. Generate an assistant reply with `POST /conversations/{conversation_id}/assistant-reply`.
+
+7. Inspect the generated coach state:
+
+```text
+GET /conversations/{conversation_id}/coach-state
+```
+
+8. Inspect the generated session report memory:
+
+```text
+GET /conversations/{conversation_id}/session-reports
+```
+
+If those two routes return data after the assistant reply call, then the migrated extractor, state tracker, and session report flow are all working.
+
+### Inspect State After Sending A Message In Expo
+
+If you send a message from the mobile app in Expo and want to inspect what the backend stored:
+
+1. Keep the backend running.
+2. Open Swagger:
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+3. Call:
+
+```text
+GET /conversations
+```
+
+4. Find the most recent conversation ID, for example `conv-3`.
+
+5. Use that ID in:
+
+```text
+GET /conversations/{conversation_id}/coach-state
+GET /conversations/{conversation_id}/session-reports
+```
+
+These routes let you inspect:
+- the current structured coach state built from the conversation
+- the saved session report memory generated from the conversation

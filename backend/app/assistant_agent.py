@@ -1,20 +1,51 @@
+from app.config import get_settings
 from app.schemas import Message
+from app.services.chatbox import ChatboxChatAgent, ChatboxChatAgentConfig
+from app.services.chatbox.extractor_agent import ChatboxExtractorAgent
 
 
-def generate_assistant_reply(messages: list[Message]) -> str:
-    user_messages = [message for message in messages if message.role == "user"]
+def build_assistant_memory(
+    *,
+    latest_session_report: str,
+    coach_state_text: str,
+) -> str:
+    memory_parts: list[str] = []
+    if latest_session_report:
+        memory_parts.append("Last session report:\n" + latest_session_report)
+    if coach_state_text:
+        memory_parts.append("Current CST:\n" + coach_state_text)
+    return "\n\n".join(memory_parts)
 
-    if not user_messages:
-        return (
-            "Hello, I am here to support you. Share what is on your mind, "
-            "and I will respond with a sample reflection."
+
+def generate_assistant_reply(
+    messages: list[Message],
+    *,
+    memory_text: str = "",
+    prompt_patch: str | None = None,
+) -> str:
+    settings = get_settings()
+    agent = ChatboxChatAgent(
+        ChatboxChatAgentConfig(
+            test_mode=settings.assistant_test_mode,
+            base_url=settings.assistant_llm_base_url,
+            api_key=settings.assistant_llm_api_key,
+            model_name=settings.assistant_model_name,
+            timeout_seconds=settings.assistant_timeout_seconds,
+            include_fewshot=settings.assistant_include_fewshot,
+            recent_history_turns=settings.assistant_recent_history_turns,
         )
+    )
+    return agent.reply_from_conversation(
+        messages, memory_text=memory_text, prompt_patch=prompt_patch
+    )
 
-    latest_user_message = user_messages[-1].content.strip()
 
-    return (
-        "Thanks for sharing that. I hear you saying: "
-        f"'{latest_user_message}'. "
-        "I would encourage you to pause, take one slow breath, and name "
-        "one small next step you can take today."
+def build_extractor_agent() -> ChatboxExtractorAgent:
+    settings = get_settings()
+    return ChatboxExtractorAgent(
+        test_mode=settings.assistant_test_mode,
+        base_url=settings.assistant_llm_base_url,
+        api_key=settings.assistant_llm_api_key,
+        model_name=settings.assistant_model_name,
+        timeout_seconds=settings.assistant_timeout_seconds,
     )

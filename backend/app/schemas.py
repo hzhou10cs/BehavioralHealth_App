@@ -36,3 +36,13 @@ class Message(BaseModel):
     role: str
     content: str
     created_at: datetime
+
+
+class CoachStateResponse(BaseModel):
+    conversation_id: str
+    coach_state: dict
+
+
+class SessionReportsResponse(BaseModel):
+    conversation_id: str
+    session_reports: list[str]

@@ -1,3 +1,8 @@
+import app.main as main_module
+
+from app.main import store
+
+
 def test_auth_login_success(client):
     response = client.post(
         "/auth/login",
@@ -77,6 +82,8 @@ def test_create_assistant_reply(client):
     items = history.json()
     assert len(items) == 2
     assert items[-1]["role"] == "assistant"
+    assert store.get_coach_state(conversation_id)
+    assert store.get_latest_session_report(conversation_id)
 
 
 def test_conversation_list_shows_updated_timestamp_after_messages(client):
@@ -97,6 +104,62 @@ def test_conversation_list_shows_updated_timestamp_after_messages(client):
     assert body[0]["updated_at"] != created["updated_at"]
 
 
+def test_assistant_reply_uses_latest_session_report_as_memory(client, monkeypatch):
+    conversation = client.post("/conversations", json={"title": "Memory Session"}).json()
+    conversation_id = conversation["id"]
+
+    client.post(
+        f"/conversations/{conversation_id}/messages",
+        json={"role": "user", "content": "I want to sleep earlier this week."},
+    )
+    first_reply = client.post(f"/conversations/{conversation_id}/assistant-reply")
+    assert first_reply.status_code == 201
+
+    client.post(
+        f"/conversations/{conversation_id}/messages",
+        json={"role": "user", "content": "I was still awake at 1 AM last night."},
+    )
+
+    captured: dict[str, str] = {}
+
+    def fake_generate_assistant_reply(messages, *, memory_text="", prompt_patch=None):
+        captured["memory_text"] = memory_text
+        return "memory aware reply"
+
+    monkeypatch.setattr(main_module, "generate_assistant_reply", fake_generate_assistant_reply)
+
+    second_reply = client.post(f"/conversations/{conversation_id}/assistant-reply")
+    assert second_reply.status_code == 201
+    assert second_reply.json()["content"] == "memory aware reply"
+    assert "Last session report:" in captured["memory_text"]
+    assert "Session Stage Report - Session" in captured["memory_text"]
+    assert "Current CST:" in captured["memory_text"]
+
+
+def test_debug_endpoints_return_coach_state_and_session_reports(client):
+    conversation = client.post("/conversations", json={"title": "Debug Session"}).json()
+    conversation_id = conversation["id"]
+
+    client.post(
+        f"/conversations/{conversation_id}/messages",
+        json={"role": "user", "content": "I am too tired after work to exercise."},
+    )
+    client.post(f"/conversations/{conversation_id}/assistant-reply")
+
+    coach_state = client.get(f"/conversations/{conversation_id}/coach-state")
+    assert coach_state.status_code == 200
+    coach_state_body = coach_state.json()
+    assert coach_state_body["conversation_id"] == conversation_id
+    assert "sleep" in coach_state_body["coach_state"]
+
+    session_reports = client.get(f"/conversations/{conversation_id}/session-reports")
+    assert session_reports.status_code == 200
+    reports_body = session_reports.json()
+    assert reports_body["conversation_id"] == conversation_id
+    assert len(reports_body["session_reports"]) == 1
+    assert "Session Stage Report - Session" in reports_body["session_reports"][0]
+
+
 def test_message_routes_return_404_for_unknown_conversation(client):
     messages = client.get("/conversations/conv-999/messages")
     assert messages.status_code == 404
@@ -109,3 +172,9 @@ def test_message_routes_return_404_for_unknown_conversation(client):
 
     reply = client.post("/conversations/conv-999/assistant-reply")
     assert reply.status_code == 404
+
+    coach_state = client.get("/conversations/conv-999/coach-state")
+    assert coach_state.status_code == 404
+
+    reports = client.get("/conversations/conv-999/session-reports")
+    assert reports.status_code == 404

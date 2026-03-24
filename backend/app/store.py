@@ -10,6 +10,8 @@ class InMemoryStore:
         self._message_seq = count(1)
         self._conversations: dict[str, Conversation] = {}
         self._messages: dict[str, list[Message]] = {}
+        self._coach_state: dict[str, dict] = {}
+        self._session_reports: dict[str, list[str]] = {}
 
     def create_conversation(self, title: str) -> Conversation:
         now = datetime.now(timezone.utc)
@@ -22,6 +24,8 @@ class InMemoryStore:
         )
         self._conversations[conversation_id] = conversation
         self._messages[conversation_id] = []
+        self._coach_state[conversation_id] = {}
+        self._session_reports[conversation_id] = []
         return conversation
 
     def list_conversations(self) -> list[Conversation]:
@@ -50,3 +54,19 @@ class InMemoryStore:
 
     def get_messages(self, conversation_id: str) -> list[Message]:
         return self._messages.get(conversation_id, [])
+
+    def get_coach_state(self, conversation_id: str) -> dict:
+        return self._coach_state.get(conversation_id, {})
+
+    def save_coach_state(self, conversation_id: str, payload: dict) -> None:
+        self._coach_state[conversation_id] = payload
+
+    def list_session_reports(self, conversation_id: str) -> list[str]:
+        return self._session_reports.get(conversation_id, [])
+
+    def get_latest_session_report(self, conversation_id: str) -> str:
+        reports = self.list_session_reports(conversation_id)
+        return reports[-1] if reports else ""
+
+    def add_session_report(self, conversation_id: str, report: str) -> None:
+        self._session_reports.setdefault(conversation_id, []).append(report)
