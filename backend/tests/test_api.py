@@ -8,7 +8,7 @@ def test_auth_login_success(client):
     body = response.json()
     assert body["token_type"] == "bearer"
     assert body["user_name"] == "alex"
-    assert body["access_token"] == "demo-token"
+    assert body["access_token"] == "development-token"
 
 
 def test_auth_login_invalid_credentials(client):
@@ -55,6 +55,48 @@ def test_submit_message_and_retrieve_history(client):
     assert items[0]["id"] == submitted["id"]
 
 
+def test_create_assistant_reply(client):
+    conversation = client.post("/conversations", json={"title": "Support Session"}).json()
+    conversation_id = conversation["id"]
+
+    client.post(
+        f"/conversations/{conversation_id}/messages",
+        json={"role": "user", "content": "I am overwhelmed by everything due this week."},
+    )
+
+    reply = client.post(f"/conversations/{conversation_id}/assistant-reply")
+    assert reply.status_code == 201
+    body = reply.json()
+    assert body["conversation_id"] == conversation_id
+    assert body["role"] == "assistant"
+    assert "I hear you saying" in body["content"]
+    assert "overwhelmed by everything due this week" in body["content"]
+
+    history = client.get(f"/conversations/{conversation_id}/history")
+    assert history.status_code == 200
+    items = history.json()
+    assert len(items) == 2
+    assert items[-1]["role"] == "assistant"
+
+
+def test_conversation_list_shows_updated_timestamp_after_messages(client):
+    created = client.post("/conversations", json={"title": "Progress Check"}).json()
+    conversation_id = created["id"]
+
+    client.post(
+        f"/conversations/{conversation_id}/messages",
+        json={"role": "user", "content": "I need help organizing my assignments."},
+    )
+    client.post(f"/conversations/{conversation_id}/assistant-reply")
+
+    listed = client.get("/conversations")
+    assert listed.status_code == 200
+    body = listed.json()
+    assert len(body) == 1
+    assert body[0]["id"] == conversation_id
+    assert body[0]["updated_at"] != created["updated_at"]
+
+
 def test_message_routes_return_404_for_unknown_conversation(client):
     messages = client.get("/conversations/conv-999/messages")
     assert messages.status_code == 404
@@ -64,3 +106,6 @@ def test_message_routes_return_404_for_unknown_conversation(client):
         json={"role": "user", "content": "Hello"},
     )
     assert submit.status_code == 404
+
+    reply = client.post("/conversations/conv-999/assistant-reply")
+    assert reply.status_code == 404

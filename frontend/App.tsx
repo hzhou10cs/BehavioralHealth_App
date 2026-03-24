@@ -84,14 +84,19 @@ function NavButton({
   onPress: () => void;
 }) {
   return (
-    <Pressable onPress={onPress} style={[styles.navButton, isActive && styles.navButtonActive]}>
+    <Pressable
+      accessibilityLabel={label}
+      accessibilityRole="button"
+      onPress={onPress}
+      style={[styles.navButton, isActive && styles.navButtonActive]}
+    >
       <Text style={[styles.navText, isActive && styles.navTextActive]}>{label}</Text>
     </Pressable>
   );
 }
 
 function LoginScreen({ onLoggedIn }: { onLoggedIn: (userName: string) => void }) {
-  const [email, setEmail] = useState("demo@health.app");
+  const [email, setEmail] = useState("alex@example.com");
   const [password, setPassword] = useState("password123");
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
@@ -108,8 +113,9 @@ function LoginScreen({ onLoggedIn }: { onLoggedIn: (userName: string) => void })
       const result = await login({ email, password });
       setStatus(`Welcome, ${result.userName}`);
       onLoggedIn(result.userName);
-    } catch {
-      setStatus("Unable to sign in (demo password is password123)");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to sign in";
+      setStatus(message === "Invalid credentials" ? "Unable to sign in (password is password123)" : message);
     } finally {
       setLoading(false);
     }
@@ -131,7 +137,7 @@ function LoginScreen({ onLoggedIn }: { onLoggedIn: (userName: string) => void })
         value={password}
         onChangeText={setPassword}
       />
-      <Button onPress={handleLogin} disabled={loading}>
+      <Button accessibilityLabel="Log In" onPress={handleLogin} disabled={loading}>
         {loading ? "Signing In..." : "Log In"}
       </Button>
       <Text style={styles.statusText}>{status}</Text>
@@ -169,12 +175,13 @@ function ChatScreen({ userName }: { userName: string }) {
     }
 
     try {
-      const created = await sendMessage(draft.trim());
-      setMessages((prev) => [...prev, created]);
+      setStatus("Sending...");
+      const updatedMessages = await sendMessage(draft.trim());
+      setMessages(updatedMessages);
       setDraft("");
       setStatus("");
-    } catch {
-      setStatus("Message failed to send");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Message failed to send");
     }
   }
 
@@ -187,7 +194,7 @@ function ChatScreen({ userName }: { userName: string }) {
         ))}
       </ScrollView>
       <Input label="Message" value={draft} onChangeText={setDraft} placeholder="Type a message" />
-      <Button onPress={onSend}>Send</Button>
+      <Button accessibilityLabel="Send" onPress={onSend}>Send</Button>
     </Card>
   );
 }

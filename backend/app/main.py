@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, status
 
+from app.assistant_agent import generate_assistant_reply
 from app.config import Settings, get_settings
 from app.schemas import (
     Conversation,
@@ -72,6 +73,22 @@ def get_history(conversation_id: str) -> list[Message]:
     if not store.has_conversation(conversation_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
     return store.get_messages(conversation_id)
+
+
+@router.post(
+    "/conversations/{conversation_id}/assistant-reply",
+    response_model=Message,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_assistant_reply(conversation_id: str) -> Message:
+    if not store.has_conversation(conversation_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+
+    history = store.get_messages(conversation_id)
+    reply = generate_assistant_reply(history)
+    return store.add_message(
+        conversation_id=conversation_id, role="assistant", content=reply
+    )
 
 
 app.include_router(router)

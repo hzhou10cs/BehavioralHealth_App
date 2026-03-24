@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     app_env: str = "development"
     debug: bool = True
     api_prefix: str = ""
-    auth_token: str = "demo-token"
+    auth_token: str = "development-token"
 
     model_config = SettingsConfigDict(
         env_prefix="BHA_",
