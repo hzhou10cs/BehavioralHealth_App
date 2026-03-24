@@ -17,12 +17,12 @@ from app.schemas import (
     SessionReportsResponse,
 )
 from app.services.chatbox.state_tracker import apply_delta_text, state_to_text
-from app.store import InMemoryStore
+from app.store import build_store
 
 settings = get_settings()
 app = FastAPI(title="Behavioral Health API", debug=settings.debug)
 router = APIRouter(prefix=settings.api_prefix)
-store = InMemoryStore()
+store = build_store(settings)
 
 
 @router.get("/health")

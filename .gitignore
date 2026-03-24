@@ -233,6 +233,7 @@ Thumbs.db
 .env.*.local
 backend_local_tmp/
 backend/backend_local_tmp/
+backend/data/
 
 # Expo
 .expo/

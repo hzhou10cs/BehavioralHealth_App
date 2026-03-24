@@ -1,13 +1,16 @@
 import json
 import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 
 class SQLiteHealthChatStore:
     def __init__(self, db_path: str | Path):
-        self.db_path = str(db_path)
-        self.conn = sqlite3.connect(self.db_path)
+        path = Path(db_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        self.db_path = str(path)
+        self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA foreign_keys = ON;")
 
@@ -29,6 +32,7 @@ class SQLiteHealthChatStore:
                 user_id INTEGER NOT NULL,
                 title TEXT NOT NULL,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             );
 
@@ -56,9 +60,37 @@ class SQLiteHealthChatStore:
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             );
+
+            CREATE TABLE IF NOT EXISTS conversation_coach_state (
+                conversation_id INTEGER PRIMARY KEY,
+                payload_json TEXT NOT NULL,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS conversation_session_reports (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                conversation_id INTEGER NOT NULL,
+                report_text TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+            );
             """
         )
+        conversation_columns = {
+            row["name"]
+            for row in self.conn.execute("PRAGMA table_info(conversations)").fetchall()
+        }
+        if "updated_at" not in conversation_columns:
+            self.conn.execute("ALTER TABLE conversations ADD COLUMN updated_at TEXT")
+            self.conn.execute(
+                "UPDATE conversations SET updated_at = created_at WHERE updated_at IS NULL"
+            )
         self.conn.commit()
+
+    @staticmethod
+    def _timestamp() -> str:
+        return datetime.now(timezone.utc).isoformat()
 
     def create_user(self, user_key: str, goals: dict[str, Any] | None = None) -> int:
         goals = goals or {}
@@ -69,6 +101,38 @@ class SQLiteHealthChatStore:
         self.conn.commit()
         return int(cur.lastrowid)
 
+    def get_user(self, user_id: int) -> dict[str, Any] | None:
+        row = self.conn.execute(
+            "SELECT id, user_key, goals_json, created_at FROM users WHERE id = ?",
+            (user_id,),
+        ).fetchone()
+        if row is None:
+            return None
+
+        payload = dict(row)
+        payload["goals"] = json.loads(payload.pop("goals_json"))
+        return payload
+
+    def get_user_by_key(self, user_key: str) -> dict[str, Any] | None:
+        row = self.conn.execute(
+            "SELECT id, user_key, goals_json, created_at FROM users WHERE user_key = ?",
+            (user_key,),
+        ).fetchone()
+        if row is None:
+            return None
+
+        payload = dict(row)
+        payload["goals"] = json.loads(payload.pop("goals_json"))
+        return payload
+
+    def ensure_user(
+        self, user_key: str, goals: dict[str, Any] | None = None
+    ) -> int:
+        existing = self.get_user_by_key(user_key)
+        if existing is not None:
+            return int(existing["id"])
+        return self.create_user(user_key, goals=goals)
+
     def update_goals(self, user_id: int, goals: dict[str, Any]) -> None:
         self.conn.execute(
             "UPDATE users SET goals_json = ? WHERE id = ?",
@@ -77,12 +141,55 @@ class SQLiteHealthChatStore:
         self.conn.commit()
 
     def create_conversation(self, user_id: int, title: str) -> int:
+        now = self._timestamp()
         cur = self.conn.execute(
-            "INSERT INTO conversations (user_id, title) VALUES (?, ?)",
-            (user_id, title),
+            """
+            INSERT INTO conversations (user_id, title, created_at, updated_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            (user_id, title, now, now),
         )
         self.conn.commit()
         return int(cur.lastrowid)
+
+    def get_conversation(self, conversation_id: int) -> dict[str, Any] | None:
+        row = self.conn.execute(
+            """
+            SELECT id, user_id, title, created_at, COALESCE(updated_at, created_at) AS updated_at
+            FROM conversations
+            WHERE id = ?
+            """,
+            (conversation_id,),
+        ).fetchone()
+        return dict(row) if row is not None else None
+
+    def list_conversations_for_user(self, user_id: int) -> list[dict[str, Any]]:
+        rows = self.conn.execute(
+            """
+            SELECT
+                id,
+                user_id,
+                title,
+                created_at,
+                COALESCE(updated_at, created_at) AS updated_at
+            FROM conversations
+            WHERE user_id = ?
+            ORDER BY datetime(COALESCE(updated_at, created_at)) ASC, id ASC
+            """,
+            (user_id,),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def get_message(self, message_id: int) -> dict[str, Any] | None:
+        row = self.conn.execute(
+            """
+            SELECT id, conversation_id, role, content, created_at
+            FROM messages
+            WHERE id = ?
+            """,
+            (message_id,),
+        ).fetchone()
+        return dict(row) if row is not None else None
 
     def add_message(
         self,
@@ -91,16 +198,78 @@ class SQLiteHealthChatStore:
         content: str,
         created_at: str | None = None,
     ) -> int:
+        message_created_at = created_at or self._timestamp()
         if created_at is None:
             cur = self.conn.execute(
-                "INSERT INTO messages (conversation_id, role, content) VALUES (?, ?, ?)",
-                (conversation_id, role, content),
+                """
+                INSERT INTO messages (conversation_id, role, content, created_at)
+                VALUES (?, ?, ?, ?)
+                """,
+                (conversation_id, role, content, message_created_at),
             )
         else:
             cur = self.conn.execute(
                 "INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)",
                 (conversation_id, role, content, created_at),
             )
+        self.conn.execute(
+            "UPDATE conversations SET updated_at = ? WHERE id = ?",
+            (message_created_at, conversation_id),
+        )
+        self.conn.commit()
+        return int(cur.lastrowid)
+
+    def get_conversation_coach_state(self, conversation_id: int) -> dict[str, Any]:
+        row = self.conn.execute(
+            """
+            SELECT payload_json
+            FROM conversation_coach_state
+            WHERE conversation_id = ?
+            """,
+            (conversation_id,),
+        ).fetchone()
+        if row is None:
+            return {}
+        return json.loads(row["payload_json"])
+
+    def save_conversation_coach_state(
+        self, conversation_id: int, payload: dict[str, Any]
+    ) -> None:
+        payload_json = json.dumps(payload)
+        self.conn.execute(
+            """
+            INSERT INTO conversation_coach_state (conversation_id, payload_json, updated_at)
+            VALUES (?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(conversation_id) DO UPDATE SET
+                payload_json = excluded.payload_json,
+                updated_at = excluded.updated_at
+            """,
+            (conversation_id, payload_json),
+        )
+        self.conn.commit()
+
+    def list_conversation_session_reports(self, conversation_id: int) -> list[str]:
+        rows = self.conn.execute(
+            """
+            SELECT report_text
+            FROM conversation_session_reports
+            WHERE conversation_id = ?
+            ORDER BY datetime(created_at) ASC, id ASC
+            """,
+            (conversation_id,),
+        ).fetchall()
+        return [str(row["report_text"]) for row in rows]
+
+    def add_conversation_session_report(
+        self, conversation_id: int, report_text: str
+    ) -> int:
+        cur = self.conn.execute(
+            """
+            INSERT INTO conversation_session_reports (conversation_id, report_text)
+            VALUES (?, ?)
+            """,
+            (conversation_id, report_text),
+        )
         self.conn.commit()
         return int(cur.lastrowid)
 
@@ -135,13 +304,6 @@ class SQLiteHealthChatStore:
             )
         self.conn.commit()
         return int(cur.lastrowid)
-
-    def list_conversations_for_user(self, user_id: int) -> list[dict[str, Any]]:
-        rows = self.conn.execute(
-            "SELECT id, user_id, title, created_at FROM conversations WHERE user_id = ? ORDER BY id ASC",
-            (user_id,),
-        ).fetchall()
-        return [dict(row) for row in rows]
 
     def get_chat_history(self, conversation_id: int) -> list[dict[str, Any]]:
         rows = self.conn.execute(

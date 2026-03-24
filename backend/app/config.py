@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     debug: bool = True
     api_prefix: str = ""
     auth_token: str = "development-token"
+    sqlite_db_path: str = "data/behavioral_health.sqlite3"
     assistant_test_mode: bool = True
     assistant_llm_base_url: str = "http://127.0.0.1:8001"
     assistant_llm_api_key: str | None = None

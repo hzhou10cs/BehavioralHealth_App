@@ -1,6 +1,6 @@
 import app.main as main_module
 
-from app.main import store
+from app.store import SQLiteAppStore
 
 
 def test_auth_login_success(client):
@@ -82,8 +82,8 @@ def test_create_assistant_reply(client):
     items = history.json()
     assert len(items) == 2
     assert items[-1]["role"] == "assistant"
-    assert store.get_coach_state(conversation_id)
-    assert store.get_latest_session_report(conversation_id)
+    assert main_module.store.get_coach_state(conversation_id)
+    assert main_module.store.get_latest_session_report(conversation_id)
 
 
 def test_conversation_list_shows_updated_timestamp_after_messages(client):
@@ -158,6 +158,29 @@ def test_debug_endpoints_return_coach_state_and_session_reports(client):
     assert reports_body["conversation_id"] == conversation_id
     assert len(reports_body["session_reports"]) == 1
     assert "Session Stage Report - Session" in reports_body["session_reports"][0]
+
+
+def test_message_history_persists_after_store_restart(client):
+    conversation = client.post("/conversations", json={"title": "Restart Session"}).json()
+    conversation_id = conversation["id"]
+
+    first_message = client.post(
+        f"/conversations/{conversation_id}/messages",
+        json={"role": "user", "content": "Please remember this after restart."},
+    )
+    assert first_message.status_code == 201
+
+    db_path = main_module.store.db_path
+    user_key = main_module.store.user_key
+
+    main_module.store.close()
+    main_module.store = SQLiteAppStore(db_path, user_key=user_key)
+
+    history = client.get(f"/conversations/{conversation_id}/history")
+    assert history.status_code == 200
+    items = history.json()
+    assert len(items) == 1
+    assert items[0]["content"] == "Please remember this after restart."
 
 
 def test_message_routes_return_404_for_unknown_conversation(client):

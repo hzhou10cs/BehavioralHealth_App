@@ -98,6 +98,10 @@ By default, `BHA_ASSISTANT_TEST_MODE=true`, which keeps the assistant in a
 safe local stub mode. If you later want to connect a real OpenAI-compatible
 LLM service, update the `BHA_ASSISTANT_*` values in `backend/.env`.
 
+The backend now stores users, conversations, and messages in SQLite. By
+default, the database file path is controlled by `BHA_SQLITE_DB_PATH` and
+points to `data/behavioral_health.sqlite3` inside the `backend` folder.
+
 ## Run The Backend
 
 Start the backend from the `backend` folder.
@@ -242,6 +246,14 @@ python -m pytest -q
 Current expected result:
 - `22 passed`
 
+To run only the standalone SQLite persistence unit tests:
+
+```powershell
+cd backend
+.\.venv\Scripts\Activate.ps1
+python -m pytest -q tests/test_sqlite_persistence.py
+```
+
 ### Frontend Tests
 
 From the repo root in Windows PowerShell:
@@ -266,6 +278,67 @@ npm run typecheck
 ```
 
 This checks the TypeScript code for type errors.
+
+## Manual SQLite Persistence Test
+
+Use this test to confirm that conversations and messages stay saved after the
+backend server restarts.
+
+1. Start the backend from the `backend` folder:
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+python -m uvicorn app.main:app --reload
+```
+
+2. Open Swagger:
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+3. Create a conversation with `POST /conversations`:
+
+```json
+{
+  "title": "SQLite Restart Test"
+}
+```
+
+4. Copy the returned conversation ID, such as `conv-1`.
+
+5. Add a message with `POST /conversations/{conversation_id}/messages`:
+
+```json
+{
+  "role": "user",
+  "content": "This message should still exist after restart."
+}
+```
+
+6. Confirm the message exists before restart with:
+
+```text
+GET /conversations/{conversation_id}/history
+```
+
+7. Stop the backend with `Ctrl + C`.
+
+8. Start the backend again:
+
+```powershell
+python -m uvicorn app.main:app --reload
+```
+
+9. Reopen Swagger and check:
+
+```text
+GET /conversations
+GET /conversations/{conversation_id}/history
+```
+
+If the conversation and message are still returned after restarting the server,
+then SQLite persistence is working correctly.
 
 ## Recommended Order For First-Time Setup
 
@@ -312,6 +385,7 @@ If you are new to this stack, use this order:
 - The frontend communicates with the backend through `frontend/lib/api.ts`.
 - The backend assistant reply route is `POST /conversations/{conversation_id}/assistant-reply`.
 - Backend routes are defined in `backend/app/main.py`.
+- Conversation and message data are persisted in SQLite instead of the old in-memory store.
 - The assistant reply route now uses a migrated chat-agent service under `backend/app/services/chatbox/`.
 - The backend also runs a migrated extractor/state-tracker flow when assistant replies are generated.
 - Session report memory is now stored and reused in later assistant replies.
