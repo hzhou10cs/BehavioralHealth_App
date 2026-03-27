@@ -39,6 +39,12 @@ class SQLiteAppStore:
     def close(self) -> None:
         self._db.close()
 
+    def get_auth_user_by_email(self, email: str) -> dict | None:
+        return self._db.get_auth_user_by_email(email)
+
+    def create_auth_user(self, email: str, password_salt: str, password_hash: str) -> int:
+        return self._db.create_auth_user(email, password_salt, password_hash)
+
     def create_conversation(self, title: str) -> Conversation:
         conversation_id = self._db.create_conversation(self._user_id, title)
         row = self._db.get_conversation(conversation_id)
