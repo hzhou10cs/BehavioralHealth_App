@@ -4,6 +4,12 @@ from app.store import SQLiteAppStore
 
 
 def test_auth_login_success(client):
+    register = client.post(
+        "/auth/register",
+        json={"email": "alex@example.com", "password": "password123"},
+    )
+    assert register.status_code == 201
+
     response = client.post(
         "/auth/login",
         json={"email": "alex@example.com", "password": "password123"},
@@ -16,7 +22,28 @@ def test_auth_login_success(client):
     assert body["access_token"] == "development-token"
 
 
+def test_auth_register_duplicate_email_returns_conflict(client):
+    first = client.post(
+        "/auth/register",
+        json={"email": "alex@example.com", "password": "password123"},
+    )
+    assert first.status_code == 201
+
+    second = client.post(
+        "/auth/register",
+        json={"email": "alex@example.com", "password": "password123"},
+    )
+    assert second.status_code == 409
+    assert second.json()["detail"] == "Email is already registered"
+
+
 def test_auth_login_invalid_credentials(client):
+    register = client.post(
+        "/auth/register",
+        json={"email": "alex@example.com", "password": "password123"},
+    )
+    assert register.status_code == 201
+
     response = client.post(
         "/auth/login",
         json={"email": "alex@example.com", "password": "wrong-password"},

@@ -19,6 +19,7 @@ import {
   fetchChatHistory,
   fetchMessages,
   login,
+  register,
   sendMessage,
   type ChatMessage,
   type ChatSession
@@ -98,10 +99,11 @@ function NavButton({
 function LoginScreen({ onLoggedIn }: { onLoggedIn: (userName: string) => void }) {
   const [email, setEmail] = useState("alex@example.com");
   const [password, setPassword] = useState("password123");
+  const [isRegistering, setIsRegistering] = useState(false);
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
 
-  async function handleLogin() {
+  async function handleAuth() {
     if (!email.trim() || !password.trim()) {
       setStatus("Email and password are required");
       return;
@@ -109,13 +111,16 @@ function LoginScreen({ onLoggedIn }: { onLoggedIn: (userName: string) => void })
 
     try {
       setLoading(true);
-      setStatus("Signing in...");
-      const result = await login({ email, password });
+      setStatus(isRegistering ? "Creating account..." : "Signing in...");
+      const result = isRegistering
+        ? await register({ email, password })
+        : await login({ email, password });
       setStatus(`Welcome, ${result.userName}`);
       onLoggedIn(result.userName);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unable to sign in";
-      setStatus(message === "Invalid credentials" ? "Unable to sign in (password is password123)" : message);
+      const fallback = isRegistering ? "Unable to create account" : "Unable to sign in";
+      const message = error instanceof Error ? error.message : fallback;
+      setStatus(message);
     } finally {
       setLoading(false);
     }
@@ -137,9 +142,22 @@ function LoginScreen({ onLoggedIn }: { onLoggedIn: (userName: string) => void })
         value={password}
         onChangeText={setPassword}
       />
-      <Button accessibilityLabel="Log In" onPress={handleLogin} disabled={loading}>
-        {loading ? "Signing In..." : "Log In"}
+      <Button accessibilityLabel={isRegistering ? "Create Account" : "Log In"} onPress={handleAuth} disabled={loading}>
+        {loading ? (isRegistering ? "Creating Account..." : "Signing In...") : isRegistering ? "Create Account" : "Log In"}
       </Button>
+      <Pressable
+        accessibilityLabel={isRegistering ? "Switch to login" : "Switch to create account"}
+        onPress={() => {
+          setIsRegistering((current) => !current);
+          setStatus("");
+        }}
+      >
+        <Text style={styles.switchText}>
+          {isRegistering
+            ? "Already have an account? Log in"
+            : "Need an account? Create one"}
+        </Text>
+      </Pressable>
       <Text style={styles.statusText}>{status}</Text>
     </Card>
   );
@@ -281,6 +299,10 @@ const styles = StyleSheet.create({
   },
   statusText: {
     color: "#334155"
+  },
+  switchText: {
+    color: "#1d4ed8",
+    fontWeight: "600"
   },
   messagesWrap: {
     maxHeight: 280,

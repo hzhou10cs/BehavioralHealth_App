@@ -161,6 +161,23 @@ export async function login({ email, password }: LoginRequest): Promise<LoginRes
   };
 }
 
+export async function register({ email, password }: LoginRequest): Promise<LoginResponse> {
+  activeConversationId = null;
+
+  const response = await request<BackendLoginResponse>("/auth/register", {
+    method: "POST",
+    body: JSON.stringify({ email, password })
+  });
+
+  accessToken = response.access_token;
+  currentUserName = response.user_name;
+
+  return {
+    accessToken: response.access_token,
+    userName: response.user_name
+  };
+}
+
 export async function fetchMessages(): Promise<ChatMessage[]> {
   const conversationId = await getActiveConversationId(false);
 

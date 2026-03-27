@@ -2,6 +2,7 @@ const {
   fetchChatHistory,
   fetchMessages,
   login,
+  register,
   resetClientStateForTests,
   sendMessage
 } = require("../lib/api");
@@ -40,6 +41,40 @@ describe("frontend api client", () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       "http://127.0.0.1:8000/auth/login",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          email: "alex@example.com",
+          password: "password123"
+        })
+      })
+    );
+    expect(result).toEqual({
+      accessToken: "development-token",
+      userName: "alex"
+    });
+  });
+
+  it("calls the backend register endpoint and maps the response", async () => {
+    const fetchMock = global.fetch;
+    fetchMock.mockResolvedValueOnce(
+      createResponse({
+        status: 201,
+        json: {
+          access_token: "development-token",
+          token_type: "bearer",
+          user_name: "alex"
+        }
+      })
+    );
+
+    const result = await register({
+      email: "alex@example.com",
+      password: "password123"
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://127.0.0.1:8000/auth/register",
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify({

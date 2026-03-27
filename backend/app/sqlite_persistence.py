@@ -27,6 +27,14 @@ class SQLiteHealthChatStore:
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
 
+            CREATE TABLE IF NOT EXISTS auth_users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT NOT NULL UNIQUE,
+                password_salt TEXT NOT NULL,
+                password_hash TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+
             CREATE TABLE IF NOT EXISTS conversations (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL,
@@ -132,6 +140,33 @@ class SQLiteHealthChatStore:
         if existing is not None:
             return int(existing["id"])
         return self.create_user(user_key, goals=goals)
+
+    def create_auth_user(
+        self,
+        email: str,
+        password_salt: str,
+        password_hash: str,
+    ) -> int:
+        cur = self.conn.execute(
+            """
+            INSERT INTO auth_users (email, password_salt, password_hash)
+            VALUES (?, ?, ?)
+            """,
+            (email, password_salt, password_hash),
+        )
+        self.conn.commit()
+        return int(cur.lastrowid)
+
+    def get_auth_user_by_email(self, email: str) -> dict[str, Any] | None:
+        row = self.conn.execute(
+            """
+            SELECT id, email, password_salt, password_hash, created_at
+            FROM auth_users
+            WHERE email = ?
+            """,
+            (email,),
+        ).fetchone()
+        return dict(row) if row is not None else None
 
     def update_goals(self, user_id: int, goals: dict[str, Any]) -> None:
         self.conn.execute(
