@@ -1,3 +1,5 @@
+import sqlite3
+
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, status
 
 from app.assistant_agent import (
@@ -5,6 +7,7 @@ from app.assistant_agent import (
     build_extractor_agent,
     generate_assistant_reply,
 )
+from app.auth import hash_password, verify_password
 from app.config import Settings, get_settings
 from app.schemas import (
     CoachStateResponse,
@@ -14,6 +17,7 @@ from app.schemas import (
     LoginResponse,
     Message,
     MessageCreate,
+    RegisterRequest,
     SessionReportsResponse,
 )
 from app.services.chatbox.state_tracker import apply_delta_text, state_to_text
@@ -34,12 +38,44 @@ def health_check() -> dict[str, str]:
 def login(
     payload: LoginRequest, settings: Settings = Depends(get_settings)
 ) -> LoginResponse:
-    if payload.password != "password123":
+    account = store.get_auth_user_by_email(str(payload.email).lower())
+    if account is None or not verify_password(
+        payload.password,
+        account["password_salt"],
+        account["password_hash"],
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials"
         )
 
-    user_name = payload.email.split("@", 1)[0]
+    user_name = str(payload.email).split("@", 1)[0]
+    return LoginResponse(access_token=settings.auth_token, user_name=user_name)
+
+
+@router.post(
+    "/auth/register",
+    response_model=LoginResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def register(
+    payload: RegisterRequest, settings: Settings = Depends(get_settings)
+) -> LoginResponse:
+    email = str(payload.email).lower()
+    salt, password_hash = hash_password(payload.password)
+
+    try:
+        store.create_auth_user(
+            email=email,
+            password_salt=salt,
+            password_hash=password_hash,
+        )
+    except sqlite3.IntegrityError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Email is already registered",
+        ) from exc
+
+    user_name = email.split("@", 1)[0]
     return LoginResponse(access_token=settings.auth_token, user_name=user_name)
 
 
