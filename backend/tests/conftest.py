@@ -24,8 +24,15 @@ def test_workdir() -> Generator[Path, None, None]:
 
 
 @pytest.fixture(autouse=True)
-def reset_store(test_workdir: Path) -> Generator[None, None, None]:
+def reset_store(
+    test_workdir: Path, monkeypatch: pytest.MonkeyPatch
+) -> Generator[None, None, None]:
     app.dependency_overrides = {}
+    monkeypatch.setenv("BHA_ASSISTANT_TEST_MODE", "true")
+    monkeypatch.setenv("BHA_ASSISTANT_LLM_BASE_URL", "http://127.0.0.1:8001")
+    monkeypatch.setenv("BHA_ASSISTANT_MODEL_NAME", "TinyLlama/TinyLlama-1.1B-Chat-v1.0")
+    monkeypatch.delenv("BHA_ASSISTANT_LLM_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     get_settings.cache_clear()
     original_store = main_module.store
     test_store = SQLiteAppStore(

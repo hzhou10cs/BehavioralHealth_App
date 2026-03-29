@@ -1,12 +1,12 @@
 # BehavioralHealth App
 
-BehavioralHealth App is a small full-stack project with:
+BehavioralHealth App is a full-stack application built with:
 - an Expo / React Native frontend
 - a FastAPI backend
-- automated tests for the backend and frontend
+- automated backend and frontend tests
 
-The app currently supports:
-- login
+Current capabilities include:
+- registering and logging in
 - creating and listing conversations
 - sending messages
 - generating an assistant reply from the backend
@@ -14,23 +14,125 @@ The app currently supports:
 - tracking coach state from conversation updates
 - generating session report memory for later assistant replies
 
+## Quickstart
+
+Use this section for the fastest path from clone to a running local app.
+
+### Windows PowerShell
+
+1. Set up the backend environment:
+
+```powershell
+cd backend
+py -3.13 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip setuptools wheel
+python -m pip install -r requirements-dev.txt
+cd ..
+```
+
+2. Install frontend dependencies:
+
+```powershell
+cd frontend
+npm install
+cd ..
+```
+
+3. Start the application from the repository root:
+
+```powershell
+npm run check
+npm run app
+```
+
+4. What to expect:
+- the backend starts on `http://127.0.0.1:8000`
+- Expo starts in a second process for the frontend
+- if you are using a simulator, browser, or Expo on the same machine, the default frontend API URL will use `http://127.0.0.1:8000`
+
+5. Open the app:
+- if Expo opens in a browser, follow the Expo prompts there
+- if you are using **Expo Go** on a phone, scan the QR code only when you are using the phone-specific commands below
+
+6. Register a test account in the app, for example:
+- email: `alex@example.com`
+- password: `password123`
+
+### Phone Testing With Expo Go
+
+Use this path only when your phone and computer are on the same Wi-Fi network.
+
+1. Install **Expo Go** on your phone.
+2. From the repository root, run:
+
+```powershell
+npm run check:phone
+npm run app:phone
+```
+
+3. What these commands do:
+- detect your local network IP address
+- update `frontend/.env` to use that IP for `EXPO_PUBLIC_API_URL`
+- start the backend on `0.0.0.0`
+- start Expo in LAN mode
+
+4. Scan the Expo QR code with your phone.
+
+### macOS / Linux / Git Bash
+
+1. Set up the backend environment:
+
+```bash
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip setuptools wheel
+python -m pip install -r requirements-dev.txt
+cd ..
+```
+
+2. Install frontend dependencies:
+
+```bash
+cd frontend
+npm install
+cd ..
+```
+
+3. Start the application:
+
+```bash
+npm run check
+npm run app
+```
+
+4. For phone testing with Expo Go:
+
+```bash
+npm run check:phone
+npm run app:phone
+```
+
+If these steps work, the remaining sections cover manual startup, Swagger-based API testing, and troubleshooting.
+
 ## Tech Stack
 - Frontend: Expo SDK 54, React Native, TypeScript
 - Backend: FastAPI, Pydantic, Python
 - Tests: `pytest` for the backend, `jest` for the frontend
 
-## What You Need Before You Start
+## Prerequisites
 
-Install these tools first:
+Install the following tools before you begin:
 - Node.js LTS
 - npm
 - Python 3.13 recommended
 
-Recommended sources:
+Recommended download sources:
 - Node.js: `https://nodejs.org/`
 - Python: `https://www.python.org/downloads/`
 
-After installing, open a new terminal and check that the tools work:
+After installation, open a new terminal and confirm the tools are available:
 
 ```powershell
 node -v
@@ -45,11 +147,11 @@ If Windows PowerShell blocks `npm` with an execution-policy error, use
 
 ## Project Structure
 
-Important folders:
+Key directories:
 - `frontend`: Expo / React Native app
 - `backend`: FastAPI backend
 
-Important files:
+Key files:
 - `frontend/App.tsx`: main mobile app UI
 - `frontend/lib/api.ts`: frontend API client
 - `backend/app/main.py`: backend API routes
@@ -82,7 +184,7 @@ python -m pip install --upgrade pip setuptools wheel
 python -m pip install -r requirements-dev.txt
 ```
 
-Optional: create a local backend `.env` file from the example file.
+Optional: create a local backend `.env` file from the example.
 
 Windows PowerShell:
 
@@ -96,14 +198,14 @@ macOS / Linux / Git Bash:
 cp .env.example .env
 ```
 
-The backend `.env` file also controls the migrated chat-agent service.
+The backend `.env` file also controls the chat-agent service configuration.
 By default, `BHA_ASSISTANT_TEST_MODE=true`, which keeps the assistant in a
 safe local stub mode. If you later want to connect a real OpenAI-compatible
 LLM service, update the `BHA_ASSISTANT_*` values in `backend/.env`.
 
-### Test With Your OpenAI API Key
+### Configure OpenAI Access
 
-To switch this backend from stub mode to OpenAI, update `backend/.env`:
+To switch the backend from stub mode to OpenAI, update `backend/.env`:
 
 ```env
 BHA_ASSISTANT_TEST_MODE=false
@@ -125,9 +227,34 @@ Notes:
 - You can still point `BHA_ASSISTANT_LLM_BASE_URL` at any other
   OpenAI-compatible service if you want.
 
-The backend now stores users, conversations, and messages in SQLite. By
-default, the database file path is controlled by `BHA_SQLITE_DB_PATH` and
-points to `data/behavioral_health.sqlite3` inside the `backend` folder.
+The backend stores users, conversations, and messages in SQLite. By default,
+the database file path is controlled by `BHA_SQLITE_DB_PATH` and points to
+`data/behavioral_health.sqlite3` inside the `backend` folder.
+
+## Frontend Setup
+
+Install the frontend dependencies from the `frontend` folder:
+
+```powershell
+cd frontend
+npm install
+```
+
+Next, create a frontend `.env` file from the example if you want to manage it manually:
+
+Windows PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+macOS / Linux / Git Bash:
+
+```bash
+cp .env.example .env
+```
+
+If you use `npm run check`, `npm run frontend`, or `npm run app`, the root tooling will create `frontend/.env` automatically if it is missing.
 
 ## Run The Backend
 
@@ -159,7 +286,13 @@ What these are:
 Once the backend is running with `BHA_ASSISTANT_TEST_MODE=false`:
 
 1. Open `http://127.0.0.1:8000/docs`.
-2. Call `POST /conversations` with:
+2. Register or log in first:
+
+- Call `POST /auth/register` or `POST /auth/login`
+- Copy the returned `access_token`
+- Click **Authorize** in Swagger and paste `Bearer YOUR_TOKEN`
+
+3. Call `POST /conversations` with:
 
 ```json
 {
@@ -167,8 +300,8 @@ Once the backend is running with `BHA_ASSISTANT_TEST_MODE=false`:
 }
 ```
 
-3. Copy the returned conversation ID.
-4. Call `POST /conversations/{conversation_id}/messages` with:
+4. Copy the returned conversation ID.
+5. Call `POST /conversations/{conversation_id}/messages` with:
 
 ```json
 {
@@ -177,33 +310,67 @@ Once the backend is running with `BHA_ASSISTANT_TEST_MODE=false`:
 }
 ```
 
-5. Call `POST /conversations/{conversation_id}/assistant-reply`.
+6. Call `POST /conversations/{conversation_id}/assistant-reply`.
 
 If the response is a real model reply instead of the built-in stub message that
 starts with `Thanks for sharing that. I hear you saying`, then the OpenAI
 integration is working.
 
-## Frontend Setup
+## Quick Start Commands
 
-Install the frontend dependencies from the `frontend` folder:
+After you finish backend setup and frontend setup, the easiest way to run the app is from the repo root.
 
-```powershell
-cd frontend
-npm install
-```
-
-Next, create a frontend `.env` file from the example:
-
-Windows PowerShell:
+There are no root dependencies to install. The root `package.json` only provides helper commands.
 
 ```powershell
-Copy-Item .env.example .env
+npm run check
+npm run app
 ```
 
-macOS / Linux / Git Bash:
+For phone testing on the same Wi-Fi:
+
+```powershell
+npm run check:phone
+npm run app:phone
+```
+
+What these root commands do:
+- `npm run check`: verifies the backend virtual environment, frontend Expo dependencies, and frontend backend URL
+- `npm run app`: starts backend and frontend together
+- `npm run app:phone`: starts backend on `0.0.0.0`, switches Expo to LAN mode, and syncs `frontend/.env` to use your local IP
+
+You can still use the helper scripts if you prefer:
+
+### Windows PowerShell
+
+```powershell
+.\run_backend.ps1
+.\run_frontend.ps1
+.\run_app.ps1
+```
+
+For phone testing:
+
+```powershell
+.\run_backend.ps1 -Phone
+.\run_frontend.ps1 -Phone
+.\run_app.ps1 -Phone
+```
+
+### macOS / Linux / Git Bash
 
 ```bash
-cp .env.example .env
+./run_backend.sh
+./run_frontend.sh
+./run_app.sh
+```
+
+For phone testing:
+
+```bash
+./run_backend.sh --phone
+./run_frontend.sh --phone
+./run_app.sh --phone
 ```
 
 ## Configure The Frontend Backend URL
@@ -232,13 +399,7 @@ On Windows, you can find your local IP with:
 ipconfig
 ```
 
-Look for the active adapter and copy the `IPv4 Address`.
-
-Example:
-
-```env
-EXPO_PUBLIC_API_URL=http://10.0.0.185:8000
-```
+Look for the active adapter and copy the `IPv4 Address`, then put that value in `frontend/.env`.
 
 ## Run The Frontend
 
@@ -254,22 +415,14 @@ This starts Expo. Keep that terminal open while you use the app.
 
 1. Make sure your phone and computer are on the same Wi-Fi network.
 2. Install **Expo Go** on your phone.
-3. Start the backend in PowerShell:
+3. From the repo root, run:
 
 ```powershell
-cd backend
-.\.venv\Scripts\Activate.ps1
-python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+npm run check:phone
+npm run app:phone
 ```
 
-4. In a second PowerShell window, start the frontend:
-
-```powershell
-cd frontend
-npm run start
-```
-
-5. Scan the Expo QR code with your phone.
+4. Scan the Expo QR code with your phone.
 
 If Expo LAN mode fails on your network, try:
 
@@ -277,15 +430,15 @@ If Expo LAN mode fails on your network, try:
 npm run start -- --tunnel
 ```
 
-## Development Login
+## Development Accounts
 
-Example development login to use in the app:
+The app now supports account registration and login.
+
+Example test account:
 - email: `alex@example.com`
 - password: `password123`
 
-The backend currently accepts any email address and only checks the password in
-code. The part of the email before `@` is used as the displayed username. That
-means `password123` must be used unless the login logic is changed.
+You can also register a second account to verify user isolation.
 
 ## Running Automated Tests
 
@@ -294,13 +447,14 @@ means `password123` must be used unless the login logic is changed.
 From the repo root in Windows PowerShell:
 
 ```powershell
+npm run check
 cd backend
 .\.venv\Scripts\Activate.ps1
 python -m pytest -q
 ```
 
 Current expected result:
-- `23 passed`
+- `28 passed`
 
 To run only the standalone SQLite persistence unit tests:
 
@@ -353,7 +507,13 @@ python -m uvicorn app.main:app --reload
 http://127.0.0.1:8000/docs
 ```
 
-3. Create a conversation with `POST /conversations`:
+3. Register or log in first:
+
+- Call `POST /auth/register` or `POST /auth/login`
+- Copy the returned `access_token`
+- Click **Authorize** in Swagger and paste `Bearer YOUR_TOKEN`
+
+4. Create a conversation with `POST /conversations`:
 
 ```json
 {
@@ -361,9 +521,9 @@ http://127.0.0.1:8000/docs
 }
 ```
 
-4. Copy the returned conversation ID, such as `conv-1`.
+5. Copy the returned conversation ID, such as `conv-1`.
 
-5. Add a message with `POST /conversations/{conversation_id}/messages`:
+6. Add a message with `POST /conversations/{conversation_id}/messages`:
 
 ```json
 {
@@ -372,21 +532,21 @@ http://127.0.0.1:8000/docs
 }
 ```
 
-6. Confirm the message exists before restart with:
+7. Confirm the message exists before restart with:
 
 ```text
 GET /conversations/{conversation_id}/history
 ```
 
-7. Stop the backend with `Ctrl + C`.
+8. Stop the backend with `Ctrl + C`.
 
-8. Start the backend again:
+9. Start the backend again:
 
 ```powershell
 python -m uvicorn app.main:app --reload
 ```
 
-9. Reopen Swagger and check:
+10. Reopen Swagger, log in again if needed, click **Authorize**, and check:
 
 ```text
 GET /conversations
@@ -403,13 +563,12 @@ If you are new to this stack, use this order:
 1. Install Node.js and Python.
 2. Set up the backend virtual environment.
 3. Install backend dependencies.
-4. Run the backend and open `/health`.
-5. Install frontend dependencies.
-6. Create `frontend/.env`.
-7. Start Expo.
-8. Log in with the development credentials.
-9. Run `python -m pytest -q`.
-10. Run `npm test`.
+4. Install frontend dependencies.
+5. Run `npm run check`.
+6. Run `npm run app`.
+7. Register a test account and send a message.
+8. Run `python -m pytest -q`.
+9. Run `npm test`.
 
 ## Troubleshooting
 
@@ -430,6 +589,7 @@ If you are new to this stack, use this order:
 - Make sure `EXPO_PUBLIC_API_URL` points to the correct backend address.
 - If you are using a real phone, start Uvicorn with `--host 0.0.0.0`.
 - Make sure the phone and computer are on the same network.
+- Prefer `npm run check:phone` and `npm run app:phone` so the frontend URL is synced automatically.
 
 `Unsupported platform: 312` while installing backend dependencies
 - This usually means the wrong Python installation is being used.
@@ -443,12 +603,14 @@ If you are new to this stack, use this order:
 ## Current API Notes
 
 - The frontend communicates with the backend through `frontend/lib/api.ts`.
+- Authentication routes are `POST /auth/register` and `POST /auth/login`.
 - The backend assistant reply route is `POST /conversations/{conversation_id}/assistant-reply`.
 - Backend routes are defined in `backend/app/main.py`.
 - Conversation and message data are persisted in SQLite instead of the old in-memory store.
 - The assistant reply route now uses a migrated chat-agent service under `backend/app/services/chatbox/`.
 - The backend also runs a migrated extractor/state-tracker flow when assistant replies are generated.
 - Session report memory is now stored and reused in later assistant replies.
+- Conversation, history, coach-state, and session-report routes require a bearer token.
 - Debug inspection routes are also available:
   - `GET /conversations/{conversation_id}/coach-state`
   - `GET /conversations/{conversation_id}/session-reports`
@@ -471,7 +633,13 @@ python -m uvicorn app.main:app --reload
 http://127.0.0.1:8000/docs
 ```
 
-3. Create a conversation with `POST /conversations`:
+3. Register or log in first:
+
+- Call `POST /auth/register` or `POST /auth/login`
+- Copy the returned `access_token`
+- Click **Authorize** in Swagger and paste `Bearer YOUR_TOKEN`
+
+4. Create a conversation with `POST /conversations`:
 
 ```json
 {
@@ -479,9 +647,9 @@ http://127.0.0.1:8000/docs
 }
 ```
 
-4. Copy the returned conversation ID, such as `conv-1`.
+5. Copy the returned conversation ID, such as `conv-1`.
 
-5. Send a user message with `POST /conversations/{conversation_id}/messages`:
+6. Send a user message with `POST /conversations/{conversation_id}/messages`:
 
 ```json
 {
@@ -490,15 +658,15 @@ http://127.0.0.1:8000/docs
 }
 ```
 
-6. Generate an assistant reply with `POST /conversations/{conversation_id}/assistant-reply`.
+7. Generate an assistant reply with `POST /conversations/{conversation_id}/assistant-reply`.
 
-7. Inspect the generated coach state:
+8. Inspect the generated coach state:
 
 ```text
 GET /conversations/{conversation_id}/coach-state
 ```
 
-8. Inspect the generated session report memory:
+9. Inspect the generated session report memory:
 
 ```text
 GET /conversations/{conversation_id}/session-reports
@@ -517,15 +685,21 @@ If you send a message from the mobile app in Expo and want to inspect what the b
 http://127.0.0.1:8000/docs
 ```
 
-3. Call:
+3. Log in with the same account you used in the mobile app:
+
+- Call `POST /auth/login`
+- Copy the returned `access_token`
+- Click **Authorize** in Swagger and paste `Bearer YOUR_TOKEN`
+
+4. Call:
 
 ```text
 GET /conversations
 ```
 
-4. Find the most recent conversation ID, for example `conv-3`.
+5. Find the most recent conversation ID, for example `conv-3`.
 
-5. Use that ID in:
+6. Use that ID in:
 
 ```text
 GET /conversations/{conversation_id}/coach-state
