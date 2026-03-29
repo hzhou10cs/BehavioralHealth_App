@@ -1,6 +1,7 @@
 import sqlite3
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, status
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.assistant_agent import (
@@ -26,6 +27,13 @@ from app.store import build_store
 
 settings = get_settings()
 app = FastAPI(title="Behavioral Health API", debug=settings.debug)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+)(:\d+)?$",
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 router = APIRouter(prefix=settings.api_prefix)
 store = build_store(settings)
 bearer_scheme = HTTPBearer(auto_error=False)

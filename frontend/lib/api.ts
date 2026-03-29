@@ -48,10 +48,14 @@ let accessToken: string | null = null;
 let activeConversationId: string | null = null;
 let currentUserName = "";
 
-export function resetClientStateForTests() {
+export function logout() {
   accessToken = null;
   activeConversationId = null;
   currentUserName = "";
+}
+
+export function resetClientStateForTests() {
+  logout();
 }
 
 function mapMessage(message: BackendMessage): ChatMessage {

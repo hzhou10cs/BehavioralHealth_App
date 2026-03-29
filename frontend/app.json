@@ -2,6 +2,7 @@
   "expo": {
     "name": "BehavioralHealth App",
     "slug": "behavioral-health-app",
+    "scheme": "behavioral-health-app",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
@@ -19,6 +20,12 @@
     },
     "web": {
       "bundler": "metro"
-    }
+    },
+    "experiments": {
+      "typedRoutes": true
+    },
+    "plugins": [
+      "expo-router"
+    ]
   }
 }

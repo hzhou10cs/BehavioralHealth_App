@@ -10,7 +10,7 @@ const args = new Set(process.argv.slice(2));
 const phone = args.has("--phone");
 const backendOnly = args.has("--backend-only");
 const frontendOnly = args.has("--frontend-only");
-const syncApiUrl = args.has("--sync-api-url");
+const syncApiUrl = args.has("--sync-api-url") || !phone;
 
 if (!frontendOnly) {
   const pythonPath = checkBackendPython();

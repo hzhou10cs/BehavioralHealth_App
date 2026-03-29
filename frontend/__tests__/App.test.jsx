@@ -132,7 +132,14 @@ describe("App integration", () => {
     });
     await flushPromises();
 
-    expect(getTextValues(root)).toContain("Therapy Chat (alex)");
+    expect(getTextValues(root)).toContain("Hello, alex");
+
+    await act(async () => {
+      root.findByProps({ accessibilityLabel: "Open Chat" }).props.onPress();
+    });
+    await flushPromises();
+
+    expect(getTextValues(root)).toContain("Active Chat (alex)");
 
     await act(async () => {
       root.findByProps({ accessibilityLabel: "Message" }).props.onChangeText("I feel overwhelmed.");
@@ -155,7 +162,14 @@ describe("App integration", () => {
     ).toBe(true);
 
     await act(async () => {
-      root.findByProps({ accessibilityLabel: "History" }).props.onPress();
+      root.findByProps({ accessibilityLabel: "Back" }).props.onPress();
+    });
+    await flushPromises();
+
+    expect(getTextValues(root)).toContain("Hello, alex");
+
+    await act(async () => {
+      root.findByProps({ accessibilityLabel: "Open History" }).props.onPress();
     });
     await flushPromises();
 

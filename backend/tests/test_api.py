@@ -77,6 +77,21 @@ def test_conversation_routes_require_bearer_auth(client):
     assert listed.json()["detail"] == "Not authenticated"
 
 
+def test_cors_preflight_allows_local_web_origin(client):
+    response = client.options(
+        "/auth/login",
+        headers={
+            "Origin": "http://localhost:19006",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "content-type",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://localhost:19006"
+    assert "POST" in response.headers["access-control-allow-methods"]
+
+
 def test_conversation_create_and_list_isolated_per_user(client):
     alex_auth = register_user(client, "alex@example.com")
     sam_auth = register_user(client, "sam@example.com")

@@ -11,6 +11,7 @@ Current capabilities include:
 - sending messages
 - generating an assistant reply from the backend
 - viewing chat history
+- navigating between dedicated app screens with Expo Router
 - tracking coach state from conversation updates
 - generating session report memory for later assistant replies
 
@@ -49,7 +50,8 @@ npm run app
 4. What to expect:
 - the backend starts on `http://127.0.0.1:8000`
 - Expo starts in a second process for the frontend
-- if you are using a simulator, browser, or Expo on the same machine, the default frontend API URL will use `http://127.0.0.1:8000`
+- the app opens to the login screen, then routes to Home, Chat, and History after authentication
+- `npm run check` syncs `frontend/.env` to `EXPO_PUBLIC_API_URL=http://127.0.0.1:8000`
 
 5. Open the app:
 - if Expo opens in a browser, follow the Expo prompts there
@@ -117,7 +119,7 @@ npm run app:phone
 If these steps work, the remaining sections cover manual startup, Swagger-based API testing, and troubleshooting.
 
 ## Tech Stack
-- Frontend: Expo SDK 54, React Native, TypeScript
+- Frontend: Expo SDK 54, Expo Router, React Native, TypeScript
 - Backend: FastAPI, Pydantic, Python
 - Tests: `pytest` for the backend, `jest` for the frontend
 
@@ -152,8 +154,10 @@ Key directories:
 - `backend`: FastAPI backend
 
 Key files:
-- `frontend/App.tsx`: main mobile app UI
+- `frontend/app/`: Expo Router screens and layouts for the mobile/web app
+- `frontend/App.tsx`: test wrapper that renders the routed app in Jest
 - `frontend/lib/api.ts`: frontend API client
+- `frontend/lib/session.tsx`: frontend authentication/session state for routed screens
 - `backend/app/main.py`: backend API routes
 - `backend/app/assistant_agent.py`: backend assistant reply logic
 - `backend/app/services/chatbox/chat_agent.py`: migrated chat-agent service layer
@@ -254,7 +258,11 @@ macOS / Linux / Git Bash:
 cp .env.example .env
 ```
 
-If you use `npm run check`, `npm run frontend`, or `npm run app`, the root tooling will create `frontend/.env` automatically if it is missing.
+If you use `npm run check`, `npm run frontend`, or `npm run app`, the root tooling will keep `frontend/.env` in sync with localhost mode. If the file is missing, it will be created automatically.
+
+If you use `npm run check:phone`, `npm run frontend:phone`, or `npm run app:phone`, the root tooling will sync `frontend/.env` to your current LAN IP for phone testing.
+
+The frontend now uses Expo Router. The runtime entry point is `expo-router/entry`, and the route files live under `frontend/app/`.
 
 ## Run The Backend
 
@@ -335,9 +343,15 @@ npm run app:phone
 ```
 
 What these root commands do:
-- `npm run check`: verifies the backend virtual environment, frontend Expo dependencies, and frontend backend URL
+- `npm run check`: verifies the backend virtual environment, frontend Expo dependencies, and syncs the frontend backend URL to localhost
 - `npm run app`: starts backend and frontend together
-- `npm run app:phone`: starts backend on `0.0.0.0`, switches Expo to LAN mode, and syncs `frontend/.env` to use your local IP
+- `npm run check:phone`: syncs `frontend/.env` to your current LAN IP and validates phone-mode prerequisites
+- `npm run app:phone`: starts backend on `0.0.0.0`, switches Expo to LAN mode, and uses the phone-mode API URL
+
+If you switch back and forth between same-computer testing and phone testing:
+- `npm run check` resets `frontend/.env` to localhost mode
+- `npm run check:phone` updates `frontend/.env` to your current local IP
+- to force same-computer localhost mode again, edit `frontend/.env` so `EXPO_PUBLIC_API_URL=http://127.0.0.1:8000`
 
 You can still use the helper scripts if you prefer:
 
@@ -406,10 +420,22 @@ Look for the active adapter and copy the `IPv4 Address`, then put that value in 
 From the `frontend` folder:
 
 ```powershell
-npm run start
+npm start -- --host localhost
 ```
 
 This starts Expo. Keep that terminal open while you use the app.
+
+For web in the browser:
+
+```powershell
+npm run web
+```
+
+If Expo appears to cache an older entrypoint after a routing change, clear the cache once:
+
+```powershell
+npm start -- --clear
+```
 
 ### Test On A Real Phone
 
@@ -427,7 +453,7 @@ npm run app:phone
 If Expo LAN mode fails on your network, try:
 
 ```powershell
-npm run start -- --tunnel
+npm start -- --tunnel
 ```
 
 ## Development Accounts
@@ -454,7 +480,7 @@ python -m pytest -q
 ```
 
 Current expected result:
-- `28 passed`
+- `29 passed`
 
 To run only the standalone SQLite persistence unit tests:
 
@@ -476,7 +502,7 @@ npm test
 These tests verify that:
 - the frontend calls the backend API client correctly
 - backend responses are mapped into frontend data correctly
-- the app UI updates after login, sending a message, and opening history
+- the routed app UI updates after login, sending a message, and opening history
 
 ### Frontend Type Check
 
@@ -577,7 +603,7 @@ If you are new to this stack, use this order:
 
 `npm.ps1 cannot be loaded` in PowerShell
 - PowerShell is blocking the npm script shim on this machine.
-- Use `npm.cmd install`, `npm.cmd run start`, `npm.cmd test`, or `npm.cmd run typecheck`.
+- Use `npm.cmd install`, `npm.cmd start -- --host localhost`, `npm.cmd test`, or `npm.cmd run typecheck`.
 
 `"node" is not recognized` when running `npm test` or `npm run typecheck`
 - Close and reopen the terminal after installing Node.js.
@@ -590,6 +616,7 @@ If you are new to this stack, use this order:
 - If you are using a real phone, start Uvicorn with `--host 0.0.0.0`.
 - Make sure the phone and computer are on the same network.
 - Prefer `npm run check:phone` and `npm run app:phone` so the frontend URL is synced automatically.
+- If you previously used phone mode, `frontend/.env` may still point to your LAN IP. That is fine on the same network, but if needed you can switch it back to `http://127.0.0.1:8000`.
 
 `Unsupported platform: 312` while installing backend dependencies
 - This usually means the wrong Python installation is being used.
@@ -598,7 +625,7 @@ If you are new to this stack, use this order:
 
 `failed to start tunnel`
 - Expo tunnel issues are often temporary.
-- Try `npm run start` first and use LAN mode.
+- Try `npm start -- --host localhost` first, or use `npm run app:phone` for the LAN workflow.
 
 ## Current API Notes
 
