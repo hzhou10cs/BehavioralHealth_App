@@ -4,6 +4,7 @@ BehavioralHealth App is a full-stack application built with:
 - an Expo / React Native frontend
 - a FastAPI backend
 - automated backend and frontend tests
+- an optional Docker workflow for the backend service
 
 Current capabilities include:
 - registering and logging in
@@ -129,10 +130,12 @@ Install the following tools before you begin:
 - Node.js LTS
 - npm
 - Python 3.13 recommended
+- Docker Desktop optional for the backend container workflow
 
 Recommended download sources:
 - Node.js: `https://nodejs.org/`
 - Python: `https://www.python.org/downloads/`
+- Docker Desktop: `https://www.docker.com/products/docker-desktop/`
 
 After installation, open a new terminal and confirm the tools are available:
 
@@ -152,6 +155,7 @@ If Windows PowerShell blocks `npm` with an execution-policy error, use
 Key directories:
 - `frontend`: Expo / React Native app
 - `backend`: FastAPI backend
+- `docs/runbooks`: operational runbooks, including Docker setup notes
 
 Key files:
 - `frontend/app/`: Expo Router screens and layouts for the mobile/web app
@@ -159,6 +163,8 @@ Key files:
 - `frontend/lib/api.ts`: frontend API client
 - `frontend/lib/session.tsx`: frontend authentication/session state for routed screens
 - `backend/app/main.py`: backend API routes
+- `backend/Dockerfile`: backend container image definition
+- `docker-compose.yml`: Docker Compose entry for the backend container workflow
 - `backend/app/assistant_agent.py`: backend assistant reply logic
 - `backend/app/services/chatbox/chat_agent.py`: migrated chat-agent service layer
 - `backend/app/services/chatbox/extractor_agent.py`: migrated extractor and session report logic
@@ -264,6 +270,40 @@ If you use `npm run check:phone`, `npm run frontend:phone`, or `npm run app:phon
 
 The frontend now uses Expo Router. The runtime entry point is `expo-router/entry`, and the route files live under `frontend/app/`.
 
+## Docker Workflow
+
+The repository now includes an initial Docker workflow for the backend service.
+
+Current scope:
+- Docker currently covers the FastAPI backend and persisted SQLite data
+- the Expo frontend still runs locally on your machine
+- the backend Docker setup is defined in `backend/Dockerfile` and `docker-compose.yml`
+
+If you want to run the backend with Docker instead of a local Python virtual environment:
+
+```powershell
+docker compose up --build
+```
+
+Expected result:
+- the backend starts on `http://127.0.0.1:8000`
+- the backend database persists in the Docker volume `backend_data`
+
+To stop the backend container:
+
+```powershell
+docker compose down
+```
+
+To remove the persisted Docker database volume too:
+
+```powershell
+docker compose down -v
+```
+
+The detailed Docker runbook is here:
+- `docs/runbooks/backend-docker.md`
+
 ## Run The Backend
 
 Start the backend from the `backend` folder.
@@ -279,6 +319,16 @@ python -m uvicorn app.main:app --reload
 ```powershell
 python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
+
+### Docker option for the backend
+
+From the repository root:
+
+```powershell
+docker compose up --build
+```
+
+This runs the backend in a container on port `8000` with persisted SQLite storage.
 
 When the backend is running, open:
 
@@ -622,6 +672,14 @@ If you are new to this stack, use this order:
 - This usually means the wrong Python installation is being used.
 - Prefer a standard Python install from `python.org`.
 - Python `3.13` is the safest choice for this project.
+
+`docker: command not found`
+- Docker Desktop is not installed or not available on PATH.
+- Install Docker Desktop and reopen the terminal.
+
+`Bind for 0.0.0.0:8000 failed: port is already allocated`
+- Another process is already using port `8000`.
+- Stop the local backend or change the published port in `docker-compose.yml`.
 
 `failed to start tunnel`
 - Expo tunnel issues are often temporary.
