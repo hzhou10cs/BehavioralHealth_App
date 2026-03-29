@@ -4,7 +4,7 @@ from app.config import get_settings
 def test_env_based_configuration(monkeypatch):
     monkeypatch.setenv("BHA_APP_ENV", "test")
     monkeypatch.setenv("BHA_DEBUG", "false")
-    monkeypatch.setenv("BHA_AUTH_TOKEN", "test-token")
+    monkeypatch.setenv("BHA_AUTH_SECRET_KEY", "test-secret")
     monkeypatch.setenv("BHA_API_PREFIX", "/v1")
     monkeypatch.setenv("BHA_SQLITE_DB_PATH", "data/test.sqlite3")
     monkeypatch.setenv("BHA_ASSISTANT_TEST_MODE", "false")
@@ -19,7 +19,7 @@ def test_env_based_configuration(monkeypatch):
 
     assert settings.app_env == "test"
     assert settings.debug is False
-    assert settings.auth_token == "test-token"
+    assert settings.auth_secret_key == "test-secret"
     assert settings.api_prefix == "/v1"
     assert settings.sqlite_db_path == "data/test.sqlite3"
     assert settings.assistant_test_mode is False
@@ -28,5 +28,16 @@ def test_env_based_configuration(monkeypatch):
     assert settings.assistant_timeout_seconds == 12.5
     assert settings.assistant_include_fewshot is False
     assert settings.assistant_recent_history_turns == 3
+
+    get_settings.cache_clear()
+
+
+def test_legacy_auth_token_env_alias_still_works(monkeypatch):
+    monkeypatch.setenv("BHA_AUTH_TOKEN", "legacy-secret")
+    get_settings.cache_clear()
+
+    settings = get_settings()
+
+    assert settings.auth_secret_key == "legacy-secret"
 
     get_settings.cache_clear()

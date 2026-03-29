@@ -207,6 +207,8 @@ describe("frontend api client", () => {
 
   it("loads history conversations from the backend", async () => {
     const fetchMock = global.fetch;
+    await loginWith(fetchMock);
+
     fetchMock.mockResolvedValueOnce(
       createResponse({
         json: [
@@ -222,6 +224,12 @@ describe("frontend api client", () => {
 
     const result = await fetchChatHistory();
 
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "http://127.0.0.1:8000/conversations",
+      expect.objectContaining({
+        headers: expect.any(Headers)
+      })
+    );
     expect(result).toEqual([
       {
         id: "conv-1",
@@ -280,7 +288,7 @@ async function loginWith(fetchMock) {
   fetchMock.mockResolvedValueOnce(
     createResponse({
       json: {
-        access_token: "development-token",
+        access_token: "alex-token",
         token_type: "bearer",
         user_name: "alex"
       }

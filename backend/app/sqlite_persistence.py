@@ -30,9 +30,11 @@ class SQLiteHealthChatStore:
             CREATE TABLE IF NOT EXISTS auth_users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 email TEXT NOT NULL UNIQUE,
+                user_id INTEGER,
                 password_salt TEXT NOT NULL,
                 password_hash TEXT NOT NULL,
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             );
 
             CREATE TABLE IF NOT EXISTS conversations (
@@ -94,11 +96,33 @@ class SQLiteHealthChatStore:
             self.conn.execute(
                 "UPDATE conversations SET updated_at = created_at WHERE updated_at IS NULL"
             )
+        auth_user_columns = {
+            row["name"]
+            for row in self.conn.execute("PRAGMA table_info(auth_users)").fetchall()
+        }
+        if "user_id" not in auth_user_columns:
+            self.conn.execute("ALTER TABLE auth_users ADD COLUMN user_id INTEGER")
+        self._backfill_auth_user_links()
         self.conn.commit()
 
     @staticmethod
     def _timestamp() -> str:
         return datetime.now(timezone.utc).isoformat()
+
+    @staticmethod
+    def _auth_user_key(email: str) -> str:
+        return f"auth:{email.lower()}"
+
+    def _backfill_auth_user_links(self) -> None:
+        rows = self.conn.execute(
+            "SELECT id, email FROM auth_users WHERE user_id IS NULL"
+        ).fetchall()
+        for row in rows:
+            user_id = self.ensure_user(self._auth_user_key(str(row["email"])))
+            self.conn.execute(
+                "UPDATE auth_users SET user_id = ? WHERE id = ?",
+                (user_id, row["id"]),
+            )
 
     def create_user(self, user_key: str, goals: dict[str, Any] | None = None) -> int:
         goals = goals or {}
@@ -147,12 +171,14 @@ class SQLiteHealthChatStore:
         password_salt: str,
         password_hash: str,
     ) -> int:
+        normalized_email = email.lower()
+        user_id = self.ensure_user(self._auth_user_key(normalized_email))
         cur = self.conn.execute(
             """
-            INSERT INTO auth_users (email, password_salt, password_hash)
-            VALUES (?, ?, ?)
+            INSERT INTO auth_users (email, user_id, password_salt, password_hash)
+            VALUES (?, ?, ?, ?)
             """,
-            (email, password_salt, password_hash),
+            (normalized_email, user_id, password_salt, password_hash),
         )
         self.conn.commit()
         return int(cur.lastrowid)
@@ -160,11 +186,22 @@ class SQLiteHealthChatStore:
     def get_auth_user_by_email(self, email: str) -> dict[str, Any] | None:
         row = self.conn.execute(
             """
-            SELECT id, email, password_salt, password_hash, created_at
+            SELECT id, email, user_id, password_salt, password_hash, created_at
             FROM auth_users
             WHERE email = ?
             """,
-            (email,),
+            (email.lower(),),
+        ).fetchone()
+        return dict(row) if row is not None else None
+
+    def get_auth_user_by_id(self, auth_user_id: int) -> dict[str, Any] | None:
+        row = self.conn.execute(
+            """
+            SELECT id, email, user_id, password_salt, password_hash, created_at
+            FROM auth_users
+            WHERE id = ?
+            """,
+            (auth_user_id,),
         ).fetchone()
         return dict(row) if row is not None else None
 

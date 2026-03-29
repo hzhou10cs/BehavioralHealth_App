@@ -38,7 +38,7 @@ def test_schema_creation(store):
             "SELECT name FROM sqlite_master WHERE type='table'"
         ).fetchall()
     }
-    assert {"users", "conversations", "messages"}.issubset(tables)
+    assert {"users", "auth_users", "conversations", "messages"}.issubset(tables)
 
     foreign_keys_enabled = store.conn.execute("PRAGMA foreign_keys;").fetchone()[0]
     assert foreign_keys_enabled == 1
@@ -69,6 +69,23 @@ def test_insert_and_query_validation(store):
     assert history[0]["role"] == "user"
     assert history[1]["role"] == "assistant"
     assert history[0]["conversation_id"] == conversation_id
+
+
+def test_auth_users_are_linked_to_distinct_chat_users(store):
+    auth_user_id = store.create_auth_user(
+        "alex@example.com",
+        password_salt="salt",
+        password_hash="hash",
+    )
+
+    account = store.get_auth_user_by_id(auth_user_id)
+    assert account is not None
+    assert account["email"] == "alex@example.com"
+    assert account["user_id"] is not None
+
+    user = store.get_user(int(account["user_id"]))
+    assert user is not None
+    assert user["user_key"] == "auth:alex@example.com"
 
 
 def test_ordered_chat_history_retrieval(store):

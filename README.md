@@ -40,6 +40,9 @@ py -0
 
 On Windows, `py -0` should show a Python version such as `3.13`.
 
+If Windows PowerShell blocks `npm` with an execution-policy error, use
+`npm.cmd` instead of `npm` for the same commands in this README.
+
 ## Project Structure
 
 Important folders:
@@ -98,6 +101,30 @@ By default, `BHA_ASSISTANT_TEST_MODE=true`, which keeps the assistant in a
 safe local stub mode. If you later want to connect a real OpenAI-compatible
 LLM service, update the `BHA_ASSISTANT_*` values in `backend/.env`.
 
+### Test With Your OpenAI API Key
+
+To switch this backend from stub mode to OpenAI, update `backend/.env`:
+
+```env
+BHA_ASSISTANT_TEST_MODE=false
+OPENAI_API_KEY=YOUR_OPENAI_API_KEY
+BHA_ASSISTANT_MODEL_NAME=gpt-4.1-mini
+```
+
+Optional explicit settings:
+
+```env
+BHA_ASSISTANT_LLM_BASE_URL=https://api.openai.com
+BHA_ASSISTANT_LLM_API_KEY=YOUR_OPENAI_API_KEY
+```
+
+Notes:
+- `OPENAI_API_KEY` now works directly in this backend as a convenience alias.
+- If you turn test mode off and keep the old stub defaults, the backend will
+  automatically switch to `https://api.openai.com` and `gpt-4.1-mini`.
+- You can still point `BHA_ASSISTANT_LLM_BASE_URL` at any other
+  OpenAI-compatible service if you want.
+
 The backend now stores users, conversations, and messages in SQLite. By
 default, the database file path is controlled by `BHA_SQLITE_DB_PATH` and
 points to `data/behavioral_health.sqlite3` inside the `backend` folder.
@@ -126,6 +153,35 @@ When the backend is running, open:
 What these are:
 - `/health` is a quick check that the backend is alive
 - `/docs` is the built-in Swagger page for testing the API in a browser
+
+### Quick OpenAI Smoke Test In Swagger
+
+Once the backend is running with `BHA_ASSISTANT_TEST_MODE=false`:
+
+1. Open `http://127.0.0.1:8000/docs`.
+2. Call `POST /conversations` with:
+
+```json
+{
+  "title": "OpenAI Test"
+}
+```
+
+3. Copy the returned conversation ID.
+4. Call `POST /conversations/{conversation_id}/messages` with:
+
+```json
+{
+  "role": "user",
+  "content": "I have been feeling overwhelmed after work and I do not know where to start."
+}
+```
+
+5. Call `POST /conversations/{conversation_id}/assistant-reply`.
+
+If the response is a real model reply instead of the built-in stub message that
+starts with `Thanks for sharing that. I hear you saying`, then the OpenAI
+integration is working.
 
 ## Frontend Setup
 
@@ -244,7 +300,7 @@ python -m pytest -q
 ```
 
 Current expected result:
-- `22 passed`
+- `23 passed`
 
 To run only the standalone SQLite persistence unit tests:
 
@@ -359,6 +415,10 @@ If you are new to this stack, use this order:
 
 `expo is not recognized`
 - Run `npm install` in the `frontend` folder first.
+
+`npm.ps1 cannot be loaded` in PowerShell
+- PowerShell is blocking the npm script shim on this machine.
+- Use `npm.cmd install`, `npm.cmd run start`, `npm.cmd test`, or `npm.cmd run typecheck`.
 
 `"node" is not recognized` when running `npm test` or `npm run typecheck`
 - Close and reopen the terminal after installing Node.js.

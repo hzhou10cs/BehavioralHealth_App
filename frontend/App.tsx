@@ -30,6 +30,7 @@ type Screen = "login" | "chat" | "history";
 export default function App() {
   const [screen, setScreen] = useState<Screen>("login");
   const [userName, setUserName] = useState<string>("");
+  const isAuthenticated = Boolean(userName);
 
   const title = useMemo(() => {
     if (screen === "chat") return "Therapy Chat";
@@ -50,11 +51,17 @@ export default function App() {
 
           <View style={styles.navRow}>
             <NavButton label="Login" isActive={screen === "login"} onPress={() => setScreen("login")} />
-            <NavButton label="Chat" isActive={screen === "chat"} onPress={() => setScreen("chat")} />
+            <NavButton
+              label="Chat"
+              isActive={screen === "chat"}
+              onPress={() => setScreen("chat")}
+              disabled={!isAuthenticated}
+            />
             <NavButton
               label="History"
               isActive={screen === "history"}
               onPress={() => setScreen("history")}
+              disabled={!isAuthenticated}
             />
           </View>
 
@@ -78,20 +85,25 @@ export default function App() {
 function NavButton({
   label,
   isActive,
-  onPress
+  onPress,
+  disabled = false
 }: {
   label: string;
   isActive: boolean;
   onPress: () => void;
+  disabled?: boolean;
 }) {
   return (
     <Pressable
       accessibilityLabel={label}
       accessibilityRole="button"
+      disabled={disabled}
       onPress={onPress}
-      style={[styles.navButton, isActive && styles.navButtonActive]}
+      style={[styles.navButton, isActive && styles.navButtonActive, disabled && styles.navButtonDisabled]}
     >
-      <Text style={[styles.navText, isActive && styles.navTextActive]}>{label}</Text>
+      <Text style={[styles.navText, isActive && styles.navTextActive, disabled && styles.navTextDisabled]}>
+        {label}
+      </Text>
     </Pressable>
   );
 }
@@ -290,12 +302,19 @@ const styles = StyleSheet.create({
     backgroundColor: "#2563eb",
     borderColor: "#2563eb"
   },
+  navButtonDisabled: {
+    backgroundColor: "#e2e8f0",
+    borderColor: "#cbd5e1"
+  },
   navText: {
     color: "#1e3a8a",
     fontWeight: "600"
   },
   navTextActive: {
     color: "#ffffff"
+  },
+  navTextDisabled: {
+    color: "#64748b"
   },
   statusText: {
     color: "#334155"

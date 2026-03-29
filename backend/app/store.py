@@ -29,76 +29,121 @@ def _message_model(row: dict) -> Message:
 
 
 class SQLiteAppStore:
-    def __init__(self, db_path: str, *, user_key: str = "development-user") -> None:
+    def __init__(self, db_path: str, *, user_key: str | None = None) -> None:
         self.db_path = db_path
         self.user_key = user_key
         self._db = SQLiteHealthChatStore(db_path)
         self._db.create_schema()
-        self._user_id = self._db.ensure_user(user_key)
+        self._default_user_id = (
+            self._db.ensure_user(user_key) if user_key is not None else None
+        )
 
     def close(self) -> None:
         self._db.close()
 
+    def _resolve_user_id(self, user_id: int | None) -> int:
+        if user_id is not None:
+            return user_id
+        if self._default_user_id is None:
+            raise ValueError("user_id is required for this operation")
+        return self._default_user_id
+
     def get_auth_user_by_email(self, email: str) -> dict | None:
         return self._db.get_auth_user_by_email(email)
+
+    def get_auth_user_by_id(self, auth_user_id: int) -> dict | None:
+        return self._db.get_auth_user_by_id(auth_user_id)
 
     def create_auth_user(self, email: str, password_salt: str, password_hash: str) -> int:
         return self._db.create_auth_user(email, password_salt, password_hash)
 
-    def create_conversation(self, title: str) -> Conversation:
-        conversation_id = self._db.create_conversation(self._user_id, title)
+    def create_conversation(self, title: str, *, user_id: int | None = None) -> Conversation:
+        conversation_id = self._db.create_conversation(
+            self._resolve_user_id(user_id), title
+        )
         row = self._db.get_conversation(conversation_id)
         if row is None:
             raise ValueError(f"Conversation {conversation_id} was not created")
         return _conversation_model(row)
 
-    def list_conversations(self) -> list[Conversation]:
+    def list_conversations(self, *, user_id: int | None = None) -> list[Conversation]:
         return [
             _conversation_model(row)
-            for row in self._db.list_conversations_for_user(self._user_id)
+            for row in self._db.list_conversations_for_user(
+                self._resolve_user_id(user_id)
+            )
         ]
 
-    def has_conversation(self, conversation_id: str) -> bool:
+    def has_conversation(self, conversation_id: str, *, user_id: int | None = None) -> bool:
         try:
             internal_id = _parse_prefixed_id(conversation_id, "conv-")
         except ValueError:
             return False
 
         row = self._db.get_conversation(internal_id)
-        return row is not None and int(row["user_id"]) == self._user_id
+        return row is not None and int(row["user_id"]) == self._resolve_user_id(user_id)
 
-    def add_message(self, conversation_id: str, role: str, content: str) -> Message:
+    def add_message(
+        self,
+        conversation_id: str,
+        role: str,
+        content: str,
+        *,
+        user_id: int | None = None,
+    ) -> Message:
         internal_id = _parse_prefixed_id(conversation_id, "conv-")
+        if not self.has_conversation(conversation_id, user_id=user_id):
+            raise ValueError(f"Conversation {conversation_id} was not found")
         message_id = self._db.add_message(internal_id, role, content)
         row = self._db.get_message(message_id)
         if row is None:
             raise ValueError(f"Message {message_id} was not created")
         return _message_model(row)
 
-    def get_messages(self, conversation_id: str) -> list[Message]:
+    def get_messages(
+        self, conversation_id: str, *, user_id: int | None = None
+    ) -> list[Message]:
         internal_id = _parse_prefixed_id(conversation_id, "conv-")
+        if not self.has_conversation(conversation_id, user_id=user_id):
+            raise ValueError(f"Conversation {conversation_id} was not found")
         return [
             _message_model(row) for row in self._db.get_chat_history(internal_id)
         ]
 
-    def get_coach_state(self, conversation_id: str) -> dict:
+    def get_coach_state(self, conversation_id: str, *, user_id: int | None = None) -> dict:
         internal_id = _parse_prefixed_id(conversation_id, "conv-")
+        if not self.has_conversation(conversation_id, user_id=user_id):
+            raise ValueError(f"Conversation {conversation_id} was not found")
         return self._db.get_conversation_coach_state(internal_id)
 
-    def save_coach_state(self, conversation_id: str, payload: dict) -> None:
+    def save_coach_state(
+        self, conversation_id: str, payload: dict, *, user_id: int | None = None
+    ) -> None:
         internal_id = _parse_prefixed_id(conversation_id, "conv-")
+        if not self.has_conversation(conversation_id, user_id=user_id):
+            raise ValueError(f"Conversation {conversation_id} was not found")
         self._db.save_conversation_coach_state(internal_id, payload)
 
-    def list_session_reports(self, conversation_id: str) -> list[str]:
+    def list_session_reports(
+        self, conversation_id: str, *, user_id: int | None = None
+    ) -> list[str]:
         internal_id = _parse_prefixed_id(conversation_id, "conv-")
+        if not self.has_conversation(conversation_id, user_id=user_id):
+            raise ValueError(f"Conversation {conversation_id} was not found")
         return self._db.list_conversation_session_reports(internal_id)
 
-    def get_latest_session_report(self, conversation_id: str) -> str:
-        reports = self.list_session_reports(conversation_id)
+    def get_latest_session_report(
+        self, conversation_id: str, *, user_id: int | None = None
+    ) -> str:
+        reports = self.list_session_reports(conversation_id, user_id=user_id)
         return reports[-1] if reports else ""
 
-    def add_session_report(self, conversation_id: str, report: str) -> None:
+    def add_session_report(
+        self, conversation_id: str, report: str, *, user_id: int | None = None
+    ) -> None:
         internal_id = _parse_prefixed_id(conversation_id, "conv-")
+        if not self.has_conversation(conversation_id, user_id=user_id):
+            raise ValueError(f"Conversation {conversation_id} was not found")
         self._db.add_conversation_session_report(internal_id, report)
 
 

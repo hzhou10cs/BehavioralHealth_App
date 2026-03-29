@@ -71,6 +71,12 @@ function mapConversation(conversation: BackendConversation): ChatSession {
   };
 }
 
+function ensureAuthenticated() {
+  if (!accessToken) {
+    throw new Error("Please log in to continue");
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
 
@@ -114,6 +120,7 @@ async function readErrorMessage(response: Response) {
 }
 
 async function listConversations(): Promise<BackendConversation[]> {
+  ensureAuthenticated();
   return request<BackendConversation[]>("/conversations");
 }
 
