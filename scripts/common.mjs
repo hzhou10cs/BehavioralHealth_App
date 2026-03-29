@@ -19,6 +19,10 @@ export function logStep(message) {
   process.stdout.write(`${message}\n`);
 }
 
+function psQuote(value) {
+  return `'${String(value).replace(/'/g, "''")}'`;
+}
+
 export function fail(message) {
   process.stderr.write(`${message}\n`);
   process.exit(1);
@@ -171,9 +175,24 @@ export function checkFrontendEnv({ phone = false, syncApiUrl = false } = {}) {
 }
 
 export function spawnStreaming(command, args, options = {}) {
+  if (isWindows) {
+    const cwd = options.cwd ?? process.cwd();
+    const commandParts = [command, ...args].map(psQuote).join(" ");
+    const psCommand = `Set-Location -LiteralPath ${psQuote(cwd)}; & ${commandParts}`;
+    return spawn(
+      "powershell",
+      ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", psCommand],
+      {
+        stdio: "inherit",
+        shell: false,
+        ...options
+      }
+    );
+  }
+
   return spawn(command, args, {
     stdio: "inherit",
-    shell: isWindows,
+    shell: false,
     ...options
   });
 }
