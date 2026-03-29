@@ -24,8 +24,14 @@ export default function HomeRoute() {
 
         <Card title="Navigation">
           <Text style={styles.copy}>
-            Access your active support conversation or review your saved session history.
+            Open your weekly lessons, continue the active support conversation, or review saved sessions.
           </Text>
+          <Button
+            accessibilityLabel="Open Lessons"
+            onPress={() => router.push("../lessons")}
+          >
+            Open Lessons
+          </Button>
           <Button accessibilityLabel="Open Chat" onPress={() => router.push("/chat")}>
             Open Chat
           </Button>

@@ -4,6 +4,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from app.lesson_catalog import LESSON_DEFINITIONS
+
 
 class SQLiteHealthChatStore:
     def __init__(self, db_path: str | Path):
@@ -85,6 +87,31 @@ class SQLiteHealthChatStore:
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
             );
+
+            CREATE TABLE IF NOT EXISTS lesson_definitions (
+                id TEXT PRIMARY KEY,
+                week INTEGER NOT NULL UNIQUE,
+                slug TEXT NOT NULL UNIQUE,
+                title TEXT NOT NULL,
+                phase TEXT NOT NULL,
+                summary TEXT NOT NULL,
+                content_json TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS user_lesson_progress (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                lesson_id TEXT NOT NULL,
+                status TEXT NOT NULL CHECK(status IN ('locked','available','in_progress','completed')),
+                started_at TEXT,
+                completed_at TEXT,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, lesson_id),
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (lesson_id) REFERENCES lesson_definitions(id) ON DELETE CASCADE
+            );
             """
         )
         conversation_columns = {
@@ -102,7 +129,9 @@ class SQLiteHealthChatStore:
         }
         if "user_id" not in auth_user_columns:
             self.conn.execute("ALTER TABLE auth_users ADD COLUMN user_id INTEGER")
+        self._seed_lessons()
         self._backfill_auth_user_links()
+        self._backfill_lesson_progress()
         self.conn.commit()
 
     @staticmethod
@@ -123,6 +152,62 @@ class SQLiteHealthChatStore:
                 "UPDATE auth_users SET user_id = ? WHERE id = ?",
                 (user_id, row["id"]),
             )
+            self.ensure_lesson_progress_for_user(user_id)
+
+    def _seed_lessons(self) -> None:
+        for lesson in LESSON_DEFINITIONS:
+            lesson_copy = dict(lesson)
+            self.conn.execute(
+                """
+                INSERT INTO lesson_definitions (
+                    id, week, slug, title, phase, summary, content_json, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(id) DO UPDATE SET
+                    week = excluded.week,
+                    slug = excluded.slug,
+                    title = excluded.title,
+                    phase = excluded.phase,
+                    summary = excluded.summary,
+                    content_json = excluded.content_json,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    lesson_copy["id"],
+                    lesson_copy["week"],
+                    lesson_copy["slug"],
+                    lesson_copy["title"],
+                    lesson_copy["phase"],
+                    lesson_copy["summary"],
+                    json.dumps(lesson_copy),
+                ),
+            )
+
+    def _backfill_lesson_progress(self) -> None:
+        rows = self.conn.execute("SELECT id FROM users ORDER BY id ASC").fetchall()
+        for row in rows:
+            self.ensure_lesson_progress_for_user(int(row["id"]))
+
+    def ensure_lesson_progress_for_user(self, user_id: int) -> None:
+        existing_rows = self.conn.execute(
+            "SELECT lesson_id FROM user_lesson_progress WHERE user_id = ?",
+            (user_id,),
+        ).fetchall()
+        existing_ids = {str(row["lesson_id"]) for row in existing_rows}
+        for index, lesson in enumerate(LESSON_DEFINITIONS):
+            if lesson["id"] in existing_ids:
+                continue
+            status = "in_progress" if index == 0 else "available"
+            started_at = self._timestamp() if index == 0 else None
+            self.conn.execute(
+                """
+                INSERT INTO user_lesson_progress (
+                    user_id, lesson_id, status, started_at, completed_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, NULL, ?)
+                """,
+                (user_id, lesson["id"], status, started_at, self._timestamp()),
+            )
 
     def create_user(self, user_key: str, goals: dict[str, Any] | None = None) -> int:
         goals = goals or {}
@@ -130,8 +215,10 @@ class SQLiteHealthChatStore:
             "INSERT INTO users (user_key, goals_json) VALUES (?, ?)",
             (user_key, json.dumps(goals)),
         )
+        user_id = int(cur.lastrowid)
+        self.ensure_lesson_progress_for_user(user_id)
         self.conn.commit()
-        return int(cur.lastrowid)
+        return user_id
 
     def get_user(self, user_id: int) -> dict[str, Any] | None:
         row = self.conn.execute(
@@ -180,6 +267,7 @@ class SQLiteHealthChatStore:
             """,
             (normalized_email, user_id, password_salt, password_hash),
         )
+        self.ensure_lesson_progress_for_user(user_id)
         self.conn.commit()
         return int(cur.lastrowid)
 
@@ -202,6 +290,55 @@ class SQLiteHealthChatStore:
             WHERE id = ?
             """,
             (auth_user_id,),
+        ).fetchone()
+        return dict(row) if row is not None else None
+
+    def list_lessons_for_user(self, user_id: int) -> list[dict[str, Any]]:
+        self.ensure_lesson_progress_for_user(user_id)
+        rows = self.conn.execute(
+            """
+            SELECT
+                ld.id,
+                ld.week,
+                ld.slug,
+                ld.title,
+                ld.phase,
+                ld.summary,
+                ld.content_json,
+                ulp.status,
+                ulp.started_at,
+                ulp.completed_at,
+                ulp.updated_at
+            FROM lesson_definitions ld
+            JOIN user_lesson_progress ulp ON ulp.lesson_id = ld.id
+            WHERE ulp.user_id = ?
+            ORDER BY ld.week ASC
+            """,
+            (user_id,),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def get_lesson_for_user(self, user_id: int, lesson_id: str) -> dict[str, Any] | None:
+        self.ensure_lesson_progress_for_user(user_id)
+        row = self.conn.execute(
+            """
+            SELECT
+                ld.id,
+                ld.week,
+                ld.slug,
+                ld.title,
+                ld.phase,
+                ld.summary,
+                ld.content_json,
+                ulp.status,
+                ulp.started_at,
+                ulp.completed_at,
+                ulp.updated_at
+            FROM lesson_definitions ld
+            JOIN user_lesson_progress ulp ON ulp.lesson_id = ld.id
+            WHERE ulp.user_id = ? AND ld.id = ?
+            """,
+            (user_id, lesson_id),
         ).fetchone()
         return dict(row) if row is not None else None
 

@@ -15,6 +15,8 @@ from app.schemas import (
     CoachStateResponse,
     Conversation,
     ConversationCreate,
+    LessonDetail,
+    LessonSummary,
     LoginRequest,
     LoginResponse,
     Message,
@@ -142,6 +144,23 @@ def register(
         ),
         user_name=user_name,
     )
+
+
+@router.get("/lessons", response_model=list[LessonSummary])
+def list_lessons(
+    current_account: dict = Depends(get_current_account),
+) -> list[LessonSummary]:
+    return store.list_lessons(user_id=int(current_account["user_id"]))
+
+
+@router.get("/lessons/{lesson_id}", response_model=LessonDetail)
+def get_lesson(
+    lesson_id: str, current_account: dict = Depends(get_current_account)
+) -> LessonDetail:
+    lesson = store.get_lesson(lesson_id, user_id=int(current_account["user_id"]))
+    if lesson is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    return lesson
 
 
 @router.post(

@@ -1,4 +1,6 @@
 const {
+  fetchLesson,
+  fetchLessons,
   fetchChatHistory,
   fetchMessages,
   login,
@@ -237,6 +239,100 @@ describe("frontend api client", () => {
         updatedAt: "2026-03-24T18:05:00.000Z"
       }
     ]);
+  });
+
+  it("loads lesson summaries from the backend", async () => {
+    const fetchMock = global.fetch;
+    await loginWith(fetchMock);
+
+    fetchMock.mockResolvedValueOnce(
+      createResponse({
+        json: [
+          {
+            id: "lesson-01",
+            week: 1,
+            slug: "welcome",
+            title: "Welcome",
+            phase: "onboarding",
+            summary: "Program overview and participant expectations.",
+            status: "in_progress"
+          }
+        ]
+      })
+    );
+
+    const result = await fetchLessons();
+
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "http://127.0.0.1:8000/lessons",
+      expect.objectContaining({
+        headers: expect.any(Headers)
+      })
+    );
+    expect(result).toEqual([
+      {
+        id: "lesson-01",
+        week: 1,
+        slug: "welcome",
+        title: "Welcome",
+        phase: "onboarding",
+        summary: "Program overview and participant expectations.",
+        status: "in_progress"
+      }
+    ]);
+  });
+
+  it("loads a single lesson detail from the backend", async () => {
+    const fetchMock = global.fetch;
+    await loginWith(fetchMock);
+
+    fetchMock.mockResolvedValueOnce(
+      createResponse({
+        json: {
+          id: "lesson-03",
+          week: 3,
+          slug: "smart-goals",
+          title: "SMART Goals",
+          phase: "onboarding",
+          summary: "Turn broad intentions into specific and measurable goals.",
+          status: "available",
+          objectives: ["Understand SMART goals"],
+          sections: [
+            {
+              type: "text",
+              title: "Why SMART Goals Work",
+              content: "A goal is more useful when it is concrete enough to act on and track.",
+              items: []
+            }
+          ],
+          activity: {
+            type: "goal_builder",
+            title: "Set Some SMART Goals",
+            prompt: "Create one eating goal and one activity goal for this week.",
+            fields: [
+              {
+                id: "food_goal",
+                label: "Food SMART goal",
+                kind: "text",
+                placeholder: "Eat 2 vegetable servings today"
+              }
+            ]
+          }
+        }
+      })
+    );
+
+    const result = await fetchLesson("lesson-03");
+
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "http://127.0.0.1:8000/lessons/lesson-03",
+      expect.objectContaining({
+        headers: expect.any(Headers)
+      })
+    );
+    expect(result.title).toBe("SMART Goals");
+    expect(result.activity.type).toBe("goal_builder");
+    expect(result.sections[0].title).toBe("Why SMART Goals Work");
   });
 
   it("returns backend messages for the active conversation", async () => {

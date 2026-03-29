@@ -21,6 +21,43 @@ export type ChatSession = {
   updatedAt: string;
 };
 
+export type LessonSummary = {
+  id: string;
+  week: number;
+  slug: string;
+  title: string;
+  phase: string;
+  summary: string;
+  status: string;
+};
+
+export type LessonSection = {
+  type: string;
+  title: string;
+  content?: string;
+  items: string[];
+};
+
+export type LessonActivityField = {
+  id: string;
+  label: string;
+  kind: string;
+  placeholder?: string;
+};
+
+export type LessonActivity = {
+  type: string;
+  title: string;
+  prompt: string;
+  fields: LessonActivityField[];
+};
+
+export type LessonDetail = LessonSummary & {
+  objectives: string[];
+  sections: LessonSection[];
+  activity?: LessonActivity | null;
+};
+
 type BackendLoginResponse = {
   access_token: string;
   token_type: string;
@@ -40,6 +77,22 @@ type BackendMessage = {
   role: "user" | "assistant";
   content: string;
   created_at: string;
+};
+
+type BackendLessonSummary = {
+  id: string;
+  week: number;
+  slug: string;
+  title: string;
+  phase: string;
+  summary: string;
+  status: string;
+};
+
+type BackendLessonDetail = BackendLessonSummary & {
+  objectives: string[];
+  sections: LessonSection[];
+  activity?: LessonActivity | null;
 };
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
@@ -72,6 +125,27 @@ function mapConversation(conversation: BackendConversation): ChatSession {
     id: conversation.id,
     title: conversation.title,
     updatedAt: conversation.updated_at
+  };
+}
+
+function mapLessonSummary(lesson: BackendLessonSummary): LessonSummary {
+  return {
+    id: lesson.id,
+    week: lesson.week,
+    slug: lesson.slug,
+    title: lesson.title,
+    phase: lesson.phase,
+    summary: lesson.summary,
+    status: lesson.status
+  };
+}
+
+function mapLessonDetail(lesson: BackendLessonDetail): LessonDetail {
+  return {
+    ...mapLessonSummary(lesson),
+    objectives: lesson.objectives,
+    sections: lesson.sections,
+    activity: lesson.activity ?? null
   };
 }
 
@@ -229,4 +303,16 @@ export async function sendMessage(text: string): Promise<ChatMessage[]> {
 export async function fetchChatHistory(): Promise<ChatSession[]> {
   const conversations = await listConversations();
   return conversations.map(mapConversation);
+}
+
+export async function fetchLessons(): Promise<LessonSummary[]> {
+  ensureAuthenticated();
+  const lessons = await request<BackendLessonSummary[]>("/lessons");
+  return lessons.map(mapLessonSummary);
+}
+
+export async function fetchLesson(lessonId: string): Promise<LessonDetail> {
+  ensureAuthenticated();
+  const lesson = await request<BackendLessonDetail>(`/lessons/${lessonId}`);
+  return mapLessonDetail(lesson);
 }
