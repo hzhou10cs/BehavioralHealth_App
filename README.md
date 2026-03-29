@@ -21,6 +21,10 @@ Current capabilities include:
 
 Use this section for the three main ways to run the project, in priority order.
 
+If you plan to use either Docker workflow below, install Docker Desktop first:
+- Download: `https://www.docker.com/products/docker-desktop/`
+- Verify: `docker --version` and `docker compose version`
+
 ### 1. Mobile Workflow: Docker Backend + Local Frontend
 
 Use this when you want the primary phone-testing workflow for the app.
