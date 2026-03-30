@@ -20,7 +20,7 @@ const port =
 
 const pythonPath = checkBackendPython();
 checkFrontendDependencies();
-const envResult = checkFrontendEnv({ phone, syncApiUrl: phone });
+const envResult = checkFrontendEnv({ phone, syncApiUrl: true });
 const npmCommand = resolveNpmCommand();
 const backendHost = phone ? "0.0.0.0" : "127.0.0.1";
 const frontendHostMode = phone ? "lan" : "localhost";

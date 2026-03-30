@@ -235,6 +235,7 @@ data/
 backend_local_tmp/
 backend/backend_local_tmp/
 backend/data/
+materials/
 
 # Expo
 .expo/

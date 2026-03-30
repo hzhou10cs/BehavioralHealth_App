@@ -77,6 +77,21 @@ def test_conversation_routes_require_bearer_auth(client):
     assert listed.json()["detail"] == "Not authenticated"
 
 
+def test_cors_preflight_allows_local_web_origin(client):
+    response = client.options(
+        "/auth/login",
+        headers={
+            "Origin": "http://localhost:19006",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "content-type",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://localhost:19006"
+    assert "POST" in response.headers["access-control-allow-methods"]
+
+
 def test_conversation_create_and_list_isolated_per_user(client):
     alex_auth = register_user(client, "alex@example.com")
     sam_auth = register_user(client, "sam@example.com")
@@ -100,6 +115,36 @@ def test_conversation_create_and_list_isolated_per_user(client):
     sam_listed = client.get("/conversations", headers=sam_headers)
     assert sam_listed.status_code == 200
     assert sam_listed.json() == []
+
+
+def test_lessons_are_seeded_and_available_per_user(client):
+    auth = register_user(client, "alex@example.com")
+    headers = auth_headers(auth["access_token"])
+
+    response = client.get("/lessons", headers=headers)
+
+    assert response.status_code == 200
+    lessons = response.json()
+    assert len(lessons) == 24
+    assert lessons[0]["id"] == "lesson-01"
+    assert lessons[0]["title"] == "Welcome"
+    assert lessons[0]["status"] == "in_progress"
+    assert lessons[-1]["id"] == "lesson-24"
+
+
+def test_lesson_detail_returns_structured_content(client):
+    auth = register_user(client, "alex@example.com")
+    headers = auth_headers(auth["access_token"])
+
+    response = client.get("/lessons/lesson-03", headers=headers)
+
+    assert response.status_code == 200
+    lesson = response.json()
+    assert lesson["title"] == "SMART Goals"
+    assert lesson["week"] == 3
+    assert "Create one food goal" in lesson["objectives"]
+    assert lesson["activity"]["type"] == "goal_builder"
+    assert len(lesson["sections"]) >= 1
 
 
 def test_submit_message_and_retrieve_history(client):

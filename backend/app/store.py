@@ -1,5 +1,14 @@
+import json
+
 from app.config import Settings
-from app.schemas import Conversation, Message
+from app.schemas import (
+    Conversation,
+    LessonActivity,
+    LessonDetail,
+    LessonSection,
+    LessonSummary,
+    Message,
+)
 from app.sqlite_persistence import SQLiteHealthChatStore
 
 
@@ -25,6 +34,34 @@ def _message_model(row: dict) -> Message:
         role=row["role"],
         content=row["content"],
         created_at=row["created_at"],
+    )
+
+
+def _lesson_summary_model(row: dict) -> LessonSummary:
+    return LessonSummary(
+        id=row["id"],
+        week=row["week"],
+        slug=row["slug"],
+        title=row["title"],
+        phase=row["phase"],
+        summary=row["summary"],
+        status=row["status"],
+    )
+
+
+def _lesson_detail_model(row: dict) -> LessonDetail:
+    payload = json.loads(row["content_json"])
+    return LessonDetail(
+        id=row["id"],
+        week=row["week"],
+        slug=row["slug"],
+        title=row["title"],
+        phase=row["phase"],
+        summary=row["summary"],
+        status=row["status"],
+        objectives=list(payload.get("objectives", [])),
+        sections=[LessonSection(**section) for section in payload.get("sections", [])],
+        activity=LessonActivity(**payload["activity"]) if payload.get("activity") else None,
     )
 
 
@@ -56,6 +93,18 @@ class SQLiteAppStore:
 
     def create_auth_user(self, email: str, password_salt: str, password_hash: str) -> int:
         return self._db.create_auth_user(email, password_salt, password_hash)
+
+    def list_lessons(self, *, user_id: int | None = None) -> list[LessonSummary]:
+        return [
+            _lesson_summary_model(row)
+            for row in self._db.list_lessons_for_user(self._resolve_user_id(user_id))
+        ]
+
+    def get_lesson(self, lesson_id: str, *, user_id: int | None = None) -> LessonDetail | None:
+        row = self._db.get_lesson_for_user(self._resolve_user_id(user_id), lesson_id)
+        if row is None:
+            return None
+        return _lesson_detail_model(row)
 
     def create_conversation(self, title: str, *, user_id: int | None = None) -> Conversation:
         conversation_id = self._db.create_conversation(

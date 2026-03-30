@@ -11,7 +11,7 @@ const args = new Set(process.argv.slice(2));
 const phone = args.has("--phone");
 
 checkFrontendDependencies();
-const envResult = checkFrontendEnv({ phone, syncApiUrl: phone });
+const envResult = checkFrontendEnv({ phone, syncApiUrl: true });
 const hostMode = phone ? "lan" : "localhost";
 const npmCommand = resolveNpmCommand();
 
