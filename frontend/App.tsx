@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
+import * as AuthSession from "expo-auth-session";
+import * as Google from "expo-auth-session/providers/google";
+import * as WebBrowser from "expo-web-browser";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -23,6 +26,8 @@ import {
   type ChatMessage,
   type ChatSession
 } from "./lib/api";
+
+WebBrowser.maybeCompleteAuthSession();
 
 type Screen = "login" | "chat" | "history";
 
@@ -95,6 +100,62 @@ function LoginScreen({ onLoggedIn }: { onLoggedIn: (userName: string) => void })
   const [password, setPassword] = useState("password123");
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [request, response, promptAsync] = Google.useAuthRequest({
+    expoClientId: process.env.EXPO_PUBLIC_GOOGLE_EXPO_CLIENT_ID,
+    androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
+    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
+    webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+    scopes: ["openid", "profile", "email"],
+    redirectUri: AuthSession.makeRedirectUri({ useProxy: true })
+  });
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function finishGoogleAuth() {
+      if (response?.type !== "success" || !response.authentication?.accessToken) {
+        return;
+      }
+
+      try {
+        setGoogleLoading(true);
+        setStatus("Signing in with Google...");
+        const userInfoResponse = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
+          headers: {
+            Authorization: `Bearer ${response.authentication.accessToken}`
+          }
+        });
+
+        if (!userInfoResponse.ok) {
+          throw new Error("Unable to load Google profile");
+        }
+
+        const profile = (await userInfoResponse.json()) as {
+          name?: string;
+          email?: string;
+        };
+
+        if (!mounted) return;
+        const derivedName = profile.name?.trim() || profile.email?.split("@", 1)[0] || "Google User";
+        setStatus(`Welcome, ${derivedName}`);
+        onLoggedIn(derivedName);
+      } catch {
+        if (!mounted) return;
+        setStatus("Google sign-in failed");
+      } finally {
+        if (mounted) {
+          setGoogleLoading(false);
+        }
+      }
+    }
+
+    finishGoogleAuth();
+
+    return () => {
+      mounted = false;
+    };
+  }, [onLoggedIn, response]);
 
   async function handleLogin() {
     if (!email.trim() || !password.trim()) {
@@ -112,6 +173,20 @@ function LoginScreen({ onLoggedIn }: { onLoggedIn: (userName: string) => void })
       setStatus("Unable to sign in (demo password is password123)");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleGoogleLogin() {
+    if (!request) {
+      setStatus("Google auth is not configured");
+      return;
+    }
+
+    try {
+      setStatus("");
+      await promptAsync({ showInRecents: true });
+    } catch {
+      setStatus("Could not open Google sign-in");
     }
   }
 
@@ -133,6 +208,9 @@ function LoginScreen({ onLoggedIn }: { onLoggedIn: (userName: string) => void })
       />
       <Button onPress={handleLogin} disabled={loading}>
         {loading ? "Signing In..." : "Log In"}
+      </Button>
+      <Button onPress={handleGoogleLogin} disabled={googleLoading || !request}>
+        {googleLoading ? "Connecting Google..." : "Continue with Google"}
       </Button>
       <Text style={styles.statusText}>{status}</Text>
     </Card>
