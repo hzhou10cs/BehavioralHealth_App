@@ -93,7 +93,6 @@ def login(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials"
         )
 
-    user_name = email.split("@", 1)[0]
     return LoginResponse(
         access_token=create_access_token(
             auth_user_id=int(account["id"]),
@@ -101,7 +100,7 @@ def login(
             email=email,
             secret_key=settings.auth_secret_key,
         ),
-        user_name=user_name,
+        user_name=str(account["name"]),
     )
 
 
@@ -119,6 +118,7 @@ def register(
     try:
         auth_user_id = store.create_auth_user(
             email=email,
+            name=payload.name,
             password_salt=salt,
             password_hash=password_hash,
         )
@@ -128,7 +128,6 @@ def register(
             detail="Email is already registered",
         ) from exc
 
-    user_name = email.split("@", 1)[0]
     account = store.get_auth_user_by_id(auth_user_id)
     if account is None:
         raise HTTPException(
@@ -142,7 +141,7 @@ def register(
             email=email,
             secret_key=settings.auth_secret_key,
         ),
-        user_name=user_name,
+        user_name=str(account["name"]),
     )
 
 
