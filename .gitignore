@@ -14,7 +14,6 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
 lib64/
 parts/
 sdist/
@@ -231,8 +230,12 @@ Thumbs.db
 # Local environment overrides
 .env.local
 .env.*.local
+.python-deps/
+data/
 backend_local_tmp/
 backend/backend_local_tmp/
+backend/data/
+materials/
 
 # Expo
 .expo/
