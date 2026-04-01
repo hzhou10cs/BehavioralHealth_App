@@ -32,6 +32,7 @@ class SQLiteHealthChatStore:
             CREATE TABLE IF NOT EXISTS auth_users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 email TEXT NOT NULL UNIQUE,
+                name TEXT NOT NULL DEFAULT '',
                 user_id INTEGER,
                 password_salt TEXT NOT NULL,
                 password_hash TEXT NOT NULL,
@@ -127,8 +128,17 @@ class SQLiteHealthChatStore:
             row["name"]
             for row in self.conn.execute("PRAGMA table_info(auth_users)").fetchall()
         }
+        if "name" not in auth_user_columns:
+            self.conn.execute("ALTER TABLE auth_users ADD COLUMN name TEXT NOT NULL DEFAULT ''")
         if "user_id" not in auth_user_columns:
             self.conn.execute("ALTER TABLE auth_users ADD COLUMN user_id INTEGER")
+        self.conn.execute(
+            """
+            UPDATE auth_users
+            SET name = substr(email, 1, instr(email, '@') - 1)
+            WHERE trim(name) = '' AND instr(email, '@') > 0
+            """
+        )
         self._seed_lessons()
         self._backfill_auth_user_links()
         self._backfill_lesson_progress()
@@ -255,6 +265,7 @@ class SQLiteHealthChatStore:
     def create_auth_user(
         self,
         email: str,
+        name: str,
         password_salt: str,
         password_hash: str,
     ) -> int:
@@ -262,10 +273,10 @@ class SQLiteHealthChatStore:
         user_id = self.ensure_user(self._auth_user_key(normalized_email))
         cur = self.conn.execute(
             """
-            INSERT INTO auth_users (email, user_id, password_salt, password_hash)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO auth_users (email, name, user_id, password_salt, password_hash)
+            VALUES (?, ?, ?, ?, ?)
             """,
-            (normalized_email, user_id, password_salt, password_hash),
+            (normalized_email, name.strip(), user_id, password_salt, password_hash),
         )
         self.ensure_lesson_progress_for_user(user_id)
         self.conn.commit()
@@ -274,7 +285,7 @@ class SQLiteHealthChatStore:
     def get_auth_user_by_email(self, email: str) -> dict[str, Any] | None:
         row = self.conn.execute(
             """
-            SELECT id, email, user_id, password_salt, password_hash, created_at
+            SELECT id, email, name, user_id, password_salt, password_hash, created_at
             FROM auth_users
             WHERE email = ?
             """,
@@ -285,7 +296,7 @@ class SQLiteHealthChatStore:
     def get_auth_user_by_id(self, auth_user_id: int) -> dict[str, Any] | None:
         row = self.conn.execute(
             """
-            SELECT id, email, user_id, password_salt, password_hash, created_at
+            SELECT id, email, name, user_id, password_salt, password_hash, created_at
             FROM auth_users
             WHERE id = ?
             """,

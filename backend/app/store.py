@@ -91,8 +91,10 @@ class SQLiteAppStore:
     def get_auth_user_by_id(self, auth_user_id: int) -> dict | None:
         return self._db.get_auth_user_by_id(auth_user_id)
 
-    def create_auth_user(self, email: str, password_salt: str, password_hash: str) -> int:
-        return self._db.create_auth_user(email, password_salt, password_hash)
+    def create_auth_user(
+        self, email: str, name: str, password_salt: str, password_hash: str
+    ) -> int:
+        return self._db.create_auth_user(email, name, password_salt, password_hash)
 
     def list_lessons(self, *, user_id: int | None = None) -> list[LessonSummary]:
         return [

@@ -3,6 +3,10 @@ export type LoginRequest = {
   password: string;
 };
 
+export type RegisterRequest = LoginRequest & {
+  name: string;
+};
+
 export type LoginResponse = {
   accessToken: string;
   userName: string;
@@ -246,12 +250,16 @@ export async function login({ email, password }: LoginRequest): Promise<LoginRes
   };
 }
 
-export async function register({ email, password }: LoginRequest): Promise<LoginResponse> {
+export async function register({
+  email,
+  password,
+  name
+}: RegisterRequest): Promise<LoginResponse> {
   activeConversationId = null;
 
   const response = await request<BackendLoginResponse>("/auth/register", {
     method: "POST",
-    body: JSON.stringify({ email, password })
+    body: JSON.stringify({ email, password, name })
   });
 
   accessToken = response.access_token;

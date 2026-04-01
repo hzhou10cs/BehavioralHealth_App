@@ -43,9 +43,9 @@ export default function LoginRoute() {
       setStatus(isRegistering ? "Creating account..." : "Signing in...");
 
       if (isRegistering) {
-        await signUp({ email, password });
+        await signUp({ name: name.trim(), email: email.trim(), password });
       } else {
-        await signIn({ email, password });
+        await signIn({ email: email.trim(), password });
       }
 
       setStatus("");

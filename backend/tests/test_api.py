@@ -3,10 +3,12 @@ import app.main as main_module
 from app.store import SQLiteAppStore
 
 
-def register_user(client, email: str, password: str = "password123") -> dict[str, str]:
+def register_user(
+    client, email: str, name: str = "Alex", password: str = "password123"
+) -> dict[str, str]:
     response = client.post(
         "/auth/register",
-        json={"email": email, "password": password},
+        json={"name": name, "email": email, "password": password},
     )
     assert response.status_code == 201
     return response.json()
@@ -23,7 +25,7 @@ def auth_user_id_for(email: str) -> int:
 
 
 def test_auth_login_success(client):
-    register = register_user(client, "alex@example.com")
+    register = register_user(client, "alex@example.com", name="Alex Parker")
 
     response = client.post(
         "/auth/login",
@@ -33,20 +35,20 @@ def test_auth_login_success(client):
     assert response.status_code == 200
     body = response.json()
     assert body["token_type"] == "bearer"
-    assert body["user_name"] == "alex"
+    assert body["user_name"] == "Alex Parker"
     assert body["access_token"] == register["access_token"]
 
 
 def test_auth_register_duplicate_email_returns_conflict(client):
     first = client.post(
         "/auth/register",
-        json={"email": "alex@example.com", "password": "password123"},
+        json={"name": "Alex", "email": "alex@example.com", "password": "password123"},
     )
     assert first.status_code == 201
 
     second = client.post(
         "/auth/register",
-        json={"email": "alex@example.com", "password": "password123"},
+        json={"name": "Alex", "email": "alex@example.com", "password": "password123"},
     )
     assert second.status_code == 409
     assert second.json()["detail"] == "Email is already registered"
@@ -55,7 +57,7 @@ def test_auth_register_duplicate_email_returns_conflict(client):
 def test_auth_login_invalid_credentials(client):
     register = client.post(
         "/auth/register",
-        json={"email": "alex@example.com", "password": "password123"},
+        json={"name": "Alex", "email": "alex@example.com", "password": "password123"},
     )
     assert register.status_code == 201
 

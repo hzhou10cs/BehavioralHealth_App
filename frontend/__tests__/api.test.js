@@ -71,6 +71,7 @@ describe("frontend api client", () => {
     );
 
     const result = await register({
+      name: "Alex Parker",
       email: "alex@example.com",
       password: "password123"
     });
@@ -81,7 +82,8 @@ describe("frontend api client", () => {
         method: "POST",
         body: JSON.stringify({
           email: "alex@example.com",
-          password: "password123"
+          password: "password123",
+          name: "Alex Parker"
         })
       })
     );
