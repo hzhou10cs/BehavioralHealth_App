@@ -143,6 +143,10 @@ describe("App integration", () => {
     await act(async () => {
       emailInput.props.onChangeText("alex@example.com");
       passwordInput.props.onChangeText("password123");
+    });
+    await flushPromises();
+
+    await act(async () => {
       root.findByProps({ accessibilityLabel: "Log In" }).props.onPress();
     });
     await flushPromises();
