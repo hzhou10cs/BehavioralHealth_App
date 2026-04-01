@@ -10,8 +10,10 @@ import { useSession } from "../lib/session";
 
 export default function LoginRoute() {
   const { isAuthenticated, signIn, signUp } = useSession();
-  const [email, setEmail] = useState("alex@example.com");
-  const [password, setPassword] = useState("password123");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [isRegistering, setIsRegistering] = useState(false);
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
@@ -23,6 +25,16 @@ export default function LoginRoute() {
   async function handleAuth() {
     if (!email.trim() || !password.trim()) {
       setStatus("Email and password are required");
+      return;
+    }
+
+    if (isRegistering && !name.trim()) {
+      setStatus("Name is required");
+      return;
+    }
+
+    if (isRegistering && password !== confirmPassword) {
+      setStatus("Passwords do not match");
       return;
     }
 
@@ -54,21 +66,42 @@ export default function LoginRoute() {
           description="Sign in to access your chat sessions and conversation history."
         />
 
-        <Card title="Account Access">
+        <Card title={isRegistering ? "Create Your Account" : "Welcome Back"}>
+          {isRegistering ? (
+            <Input
+              label="Name"
+              autoCapitalize="words"
+              autoCorrect={false}
+              value={name}
+              onChangeText={setName}
+            />
+          ) : null}
           <Input
             label="Email"
             autoCapitalize="none"
             autoCorrect={false}
             keyboardType="email-address"
+            autoComplete="email"
+            textContentType="emailAddress"
             value={email}
             onChangeText={setEmail}
           />
           <Input
             label="Password"
             secureTextEntry
+            autoComplete={isRegistering ? "new-password" : "password"}
+            textContentType={isRegistering ? "newPassword" : "password"}
             value={password}
             onChangeText={setPassword}
           />
+          {isRegistering ? (
+            <Input
+              label="Confirm Password"
+              secureTextEntry
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+            />
+          ) : null}
           <Button
             accessibilityLabel={isRegistering ? "Create Account" : "Log In"}
             onPress={handleAuth}
@@ -87,6 +120,8 @@ export default function LoginRoute() {
             onPress={() => {
               setIsRegistering((current) => !current);
               setStatus("");
+              setName("");
+              setConfirmPassword("");
             }}
           >
             <Text style={styles.switchText}>
