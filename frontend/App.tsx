@@ -19,6 +19,7 @@ import {
   fetchChatHistory,
   fetchMessages,
   login,
+  register,
   sendMessage,
   type ChatMessage,
   type ChatSession
@@ -29,11 +30,13 @@ type Screen = "login" | "chat" | "history";
 export default function App() {
   const [screen, setScreen] = useState<Screen>("login");
   const [userName, setUserName] = useState<string>("");
+  const [userEmail, setUserEmail] = useState<string>("");
+  const isAuthenticated = Boolean(userName && userEmail);
 
   const title = useMemo(() => {
     if (screen === "chat") return "Therapy Chat";
     if (screen === "history") return "Chat History";
-    return "Behavioral Health Login";
+    return "Behavioral Health Access";
   }, [screen]);
 
   return (
@@ -48,7 +51,11 @@ export default function App() {
           <Text style={styles.subHeading}>{title}</Text>
 
           <View style={styles.navRow}>
-            <NavButton label="Login" isActive={screen === "login"} onPress={() => setScreen("login")} />
+            <NavButton
+              label={isAuthenticated ? "Account" : "Login"}
+              isActive={screen === "login"}
+              onPress={() => setScreen("login")}
+            />
             <NavButton label="Chat" isActive={screen === "chat"} onPress={() => setScreen("chat")} />
             <NavButton
               label="History"
@@ -58,10 +65,19 @@ export default function App() {
           </View>
 
           {screen === "login" ? (
-            <LoginScreen
-              onLoggedIn={(name) => {
-                setUserName(name);
+            <AuthScreen
+              isAuthenticated={isAuthenticated}
+              userName={userName}
+              userEmail={userEmail}
+              onLoggedIn={(info) => {
+                setUserName(info.userName);
+                setUserEmail(info.email);
                 setScreen("chat");
+              }}
+              onLoggedOut={() => {
+                setUserName("");
+                setUserEmail("");
+                setScreen("login");
               }}
             />
           ) : null}
@@ -90,33 +106,114 @@ function NavButton({
   );
 }
 
-function LoginScreen({ onLoggedIn }: { onLoggedIn: (userName: string) => void }) {
-  const [email, setEmail] = useState("demo@health.app");
-  const [password, setPassword] = useState("password123");
+type AuthMode = "login" | "register";
+
+function AuthScreen({
+  isAuthenticated,
+  userName: activeUserName,
+  userEmail: activeUserEmail,
+  onLoggedIn,
+  onLoggedOut
+}: {
+  isAuthenticated: boolean;
+  userName: string;
+  userEmail: string;
+  onLoggedIn: (info: { userName: string; email: string }) => void;
+  onLoggedOut: () => void;
+}) {
+  const [mode, setMode] = useState<AuthMode>("login");
+  const [userName, setUserName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
 
-  async function handleLogin() {
+  async function handleSubmit() {
     if (!email.trim() || !password.trim()) {
       setStatus("Email and password are required");
       return;
     }
 
+    if (mode === "register" && !userName.trim()) {
+      setStatus("Name is required");
+      return;
+    }
+
+    if (mode === "register" && password.length < 8) {
+      setStatus("Password must be at least 8 characters");
+      return;
+    }
+
+    if (mode === "register" && password !== confirmPassword) {
+      setStatus("Passwords do not match");
+      return;
+    }
+
     try {
       setLoading(true);
-      setStatus("Signing in...");
-      const result = await login({ email, password });
-      setStatus(`Welcome, ${result.userName}`);
-      onLoggedIn(result.userName);
-    } catch {
-      setStatus("Unable to sign in (demo password is password123)");
+      setStatus(mode === "login" ? "Signing in..." : "Creating account...");
+      const result =
+        mode === "login"
+          ? await login({ email, password })
+          : await register({ email, password, userName: userName.trim() });
+      setStatus(mode === "login" ? `Welcome back, ${result.userName}` : `Welcome, ${result.userName}`);
+      setPassword("");
+      setConfirmPassword("");
+      onLoggedIn({ userName: result.userName, email: email.trim().toLowerCase() });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      console.error(`[auth:${mode}]`, errorMessage);
+      if (mode === "login") {
+        setStatus("Unable to sign in. Please check your email and password.");
+      } else if (errorMessage.toLowerCase().includes("already registered")) {
+        setStatus("That email is already registered. Try logging in.");
+      } else if (errorMessage.toLowerCase().includes("timed out")) {
+        setStatus("Request timed out. Please try again.");
+      } else {
+        setStatus("Unable to create account right now. Please try again.");
+      }
     } finally {
       setLoading(false);
     }
   }
 
+  if (isAuthenticated) {
+    return (
+      <Card title="Account">
+        <Text style={styles.accountLabel}>Signed in as</Text>
+        <Text style={styles.accountName}>{activeUserName}</Text>
+        <Text style={styles.accountEmail}>{activeUserEmail}</Text>
+        <Button
+          onPress={() => {
+            setMode("login");
+            setUserName("");
+            setEmail("");
+            setPassword("");
+            setConfirmPassword("");
+            setStatus("You are logged out");
+            onLoggedOut();
+          }}
+        >
+          Log Out
+        </Button>
+        {status ? <Text style={styles.statusText}>{status}</Text> : null}
+      </Card>
+    );
+  }
+
   return (
-    <Card title="Behavioral Health Login">
+    <Card title="Behavioral Health Access">
+      {mode === "register" ? (
+        <Input
+          label="Name"
+          autoCapitalize="words"
+          autoCorrect={false}
+          value={userName}
+          onChangeText={setUserName}
+          placeholder="Your name"
+        />
+      ) : null}
       <Input
         label="Email"
         autoCapitalize="none"
@@ -131,10 +228,35 @@ function LoginScreen({ onLoggedIn }: { onLoggedIn: (userName: string) => void })
         value={password}
         onChangeText={setPassword}
       />
-      <Button onPress={handleLogin} disabled={loading}>
-        {loading ? "Signing In..." : "Log In"}
+      {mode === "register" ? (
+        <Input
+          label="Confirm Password"
+          secureTextEntry
+          value={confirmPassword}
+          onChangeText={setConfirmPassword}
+        />
+      ) : null}
+      <Button onPress={handleSubmit} disabled={loading}>
+        {loading ? (mode === "login" ? "Signing In..." : "Creating Account...") : mode === "login" ? "Log In" : "Register"}
       </Button>
-      <Text style={styles.statusText}>{status}</Text>
+      <View style={styles.switchAuthRow}>
+        <Text style={styles.switchAuthText}>
+          {mode === "login" ? "Don't have an account?" : "Already have an account?"}
+        </Text>
+        <Pressable
+          onPress={() => {
+            setMode(mode === "login" ? "register" : "login");
+            setStatus("");
+            setLoading(false);
+          }}
+          hitSlop={8}
+        >
+          <Text style={styles.switchAuthLink}>
+            {mode === "login" ? "Sign up here" : "Log in here"}
+          </Text>
+        </Pressable>
+      </View>
+      {status ? <Text style={styles.statusText}>{status}</Text> : null}
     </Card>
   );
 }
@@ -271,6 +393,30 @@ const styles = StyleSheet.create({
   },
   navTextActive: {
     color: "#ffffff"
+  },
+  switchAuthRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 6
+  },
+  switchAuthText: {
+    color: "#475569"
+  },
+  switchAuthLink: {
+    color: "#2563eb",
+    fontWeight: "700"
+  },
+  accountLabel: {
+    color: "#475569"
+  },
+  accountName: {
+    color: "#0f172a",
+    fontSize: 22,
+    fontWeight: "700"
+  },
+  accountEmail: {
+    color: "#334155"
   },
   statusText: {
     color: "#334155"
