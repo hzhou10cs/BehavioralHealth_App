@@ -1,6 +1,0 @@
-.expo
-node_modules
-dist
-.env
-coverage
-*.log

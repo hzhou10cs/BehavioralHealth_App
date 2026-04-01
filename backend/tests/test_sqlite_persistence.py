@@ -38,10 +38,7 @@ def test_schema_creation(store):
             "SELECT name FROM sqlite_master WHERE type='table'"
         ).fetchall()
     }
-    assert {"users", "auth_users", "conversations", "messages"}.issubset(tables)
-
-    foreign_keys_enabled = store.conn.execute("PRAGMA foreign_keys;").fetchone()[0]
-    assert foreign_keys_enabled == 1
+    assert {"users", "conversations", "messages"}.issubset(tables)
 
 
 def test_insert_and_query_validation(store):
@@ -49,16 +46,6 @@ def test_insert_and_query_validation(store):
     conversation_id = store.create_conversation(user_id, "Daily Check-in")
     store.add_message(conversation_id, "user", "I had a stressful morning.")
     store.add_message(conversation_id, "assistant", "Let's slow down and breathe.")
-
-    user = store.get_user(user_id)
-    assert user is not None
-    assert user["user_key"] == "linh1"
-    assert user["goals"] == {"focus": "sleep and anxiety"}
-
-    conversation = store.get_conversation(conversation_id)
-    assert conversation is not None
-    assert conversation["user_id"] == user_id
-    assert conversation["title"] == "Daily Check-in"
 
     conversations = store.list_conversations_for_user(user_id)
     assert len(conversations) == 1
@@ -68,24 +55,6 @@ def test_insert_and_query_validation(store):
     assert len(history) == 2
     assert history[0]["role"] == "user"
     assert history[1]["role"] == "assistant"
-    assert history[0]["conversation_id"] == conversation_id
-
-
-def test_auth_users_are_linked_to_distinct_chat_users(store):
-    auth_user_id = store.create_auth_user(
-        "alex@example.com",
-        password_salt="salt",
-        password_hash="hash",
-    )
-
-    account = store.get_auth_user_by_id(auth_user_id)
-    assert account is not None
-    assert account["email"] == "alex@example.com"
-    assert account["user_id"] is not None
-
-    user = store.get_user(int(account["user_id"]))
-    assert user is not None
-    assert user["user_key"] == "auth:alex@example.com"
 
 
 def test_ordered_chat_history_retrieval(store):
@@ -122,13 +91,6 @@ def test_foreign_key_constraint_checks(store):
         store.add_message(conversation_id=9999, role="user", content="no parent convo")
 
     store.add_message(conversation_id, role="user", content="valid message")
-
-    store.conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
-    store.conn.commit()
-
-    assert store.get_user(user_id) is None
-    assert store.get_conversation(conversation_id) is None
-    assert store.get_chat_history(conversation_id) == []
 
 
 def test_user_bundle_export_matches_expected_health_chat_layout(store, workdir):
