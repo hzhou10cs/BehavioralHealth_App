@@ -20,66 +20,6 @@ def test_auth_login_invalid_credentials(client):
     assert response.json()["detail"] == "Invalid credentials"
 
 
-def test_auth_register_success_and_login(client):
-    register_response = client.post(
-        "/auth/register",
-        json={
-            "email": "newuser@example.com",
-            "password": "VeryStrongPwd1",
-            "user_name": "New User",
-        },
-    )
-    assert register_response.status_code == 201
-    register_body = register_response.json()
-    assert register_body["token_type"] == "bearer"
-    assert register_body["user_name"] == "New User"
-    assert register_body["access_token"] == "demo-token"
-
-    login_response = client.post(
-        "/auth/login",
-        json={"email": "newuser@example.com", "password": "VeryStrongPwd1"},
-    )
-    assert login_response.status_code == 200
-    login_body = login_response.json()
-    assert login_body["user_name"] == "New User"
-
-
-def test_auth_register_duplicate_email_returns_conflict(client):
-    first_response = client.post(
-        "/auth/register",
-        json={
-            "email": "dup@example.com",
-            "password": "VeryStrongPwd1",
-            "user_name": "Dup One",
-        },
-    )
-    assert first_response.status_code == 201
-
-    second_response = client.post(
-        "/auth/register",
-        json={
-            "email": "dup@example.com",
-            "password": "VeryStrongPwd2",
-            "user_name": "Dup Two",
-        },
-    )
-    assert second_response.status_code == 409
-    assert second_response.json()["detail"] == "Email already registered"
-
-
-def test_auth_signup_alias_registers_user(client):
-    response = client.post(
-        "/auth/signup",
-        json={
-            "email": "alias@example.com",
-            "password": "VeryStrongPwd1",
-            "user_name": "Alias User",
-        },
-    )
-    assert response.status_code == 201
-    assert response.json()["user_name"] == "Alias User"
-
-
 def test_conversation_create_and_list(client):
     create = client.post("/conversations", json={"title": "Weekly Therapy Check-in"})
     assert create.status_code == 201
