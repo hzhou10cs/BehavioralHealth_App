@@ -1,11 +1,11 @@
 import { createContext, useContext, useMemo, useState, type PropsWithChildren } from "react";
-import { login, logout, register, type LoginRequest } from "./api";
+import { login, logout, register, type LoginRequest, type RegisterRequest } from "./api";
 
 type SessionContextValue = {
   isAuthenticated: boolean;
   userName: string;
   signIn: (request: LoginRequest) => Promise<void>;
-  signUp: (request: LoginRequest) => Promise<void>;
+  signUp: (request: RegisterRequest) => Promise<void>;
   signOut: () => void;
 };
 
