@@ -83,7 +83,24 @@ describe("frontend api client", () => {
         body: JSON.stringify({
           email: "alex@example.com",
           password: "password123",
-          name: "Alex Parker"
+          name: "Alex Parker",
+          health_profile: {
+            first_name: "",
+            last_name: "",
+            gender: "",
+            occupation: "",
+            phone: "",
+            email: "alex@example.com",
+            height: "",
+            initial_weight: "",
+            body_measurements: "",
+            weight_statement: "",
+            allergy: "N/A",
+            medication: "N/A",
+            lifestyle: "N/A",
+            medical_history: "N/A",
+            register_date: ""
+          }
         })
       })
     );
@@ -395,3 +412,4 @@ async function loginWith(fetchMock) {
 
   await login({ email: "alex@example.com", password: "password123" });
 }
+

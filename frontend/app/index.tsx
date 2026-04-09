@@ -1,12 +1,31 @@
 import { Redirect, router } from "expo-router";
 import { useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import AppShell from "../components/AppShell";
 import Button from "../components/Button";
 import Card from "../components/Card";
 import Input from "../components/Input";
 import ScreenHeader from "../components/ScreenHeader";
+import { updateHealthProfile, type HealthProfile } from "../lib/api";
 import { useSession } from "../lib/session";
+
+const EMPTY_PROFILE: HealthProfile = {
+  firstName: "",
+  lastName: "",
+  gender: "",
+  occupation: "",
+  phone: "",
+  email: "",
+  height: "",
+  initialWeight: "",
+  bodyMeasurements: "",
+  weightStatement: "",
+  allergy: "N/A",
+  medication: "N/A",
+  lifestyle: "N/A",
+  medicalHistory: "N/A",
+  registerDate: ""
+};
 
 export default function LoginRoute() {
   const { isAuthenticated, signIn, signUp } = useSession();
@@ -14,12 +33,39 @@ export default function LoginRoute() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [profile, setProfile] = useState<HealthProfile>(EMPTY_PROFILE);
   const [isRegistering, setIsRegistering] = useState(false);
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
 
   if (isAuthenticated) {
     return <Redirect href="/home" />;
+  }
+
+  function updateProfile<K extends keyof HealthProfile>(key: K, value: HealthProfile[K]) {
+    setProfile((current) => ({ ...current, [key]: value }));
+  }
+
+  function validateHealthProfile() {
+    const required: Array<[string, string]> = [
+      ["Gender", profile.gender],
+      ["Height", profile.height],
+      ["Initial weight", profile.initialWeight],
+      ["Allergy", profile.allergy],
+      ["Medication", profile.medication],
+      ["Lifestyle", profile.lifestyle],
+      ["Medical history", profile.medicalHistory]
+    ];
+
+    const missing = required
+      .filter(([, value]) => !value.trim())
+      .map(([label]) => label);
+
+    if (missing.length > 0) {
+      return `Please complete required health fields: ${missing.join(", ")}`;
+    }
+
+    return "";
   }
 
   async function handleAuth() {
@@ -38,12 +84,34 @@ export default function LoginRoute() {
       return;
     }
 
+    if (isRegistering) {
+      const profileError = validateHealthProfile();
+      if (profileError) {
+        setStatus(profileError);
+        return;
+      }
+    }
+
     try {
       setLoading(true);
       setStatus(isRegistering ? "Creating account..." : "Signing in...");
 
       if (isRegistering) {
-        await signUp({ name: name.trim(), email: email.trim(), password });
+        const signupProfile: HealthProfile = {
+          ...profile,
+          firstName: profile.firstName.trim() || name.trim().split(/\s+/)[0] || "",
+          lastName: profile.lastName.trim() || name.trim().split(/\s+/).slice(1).join(" "),
+          email: email.trim()
+        };
+
+        await signUp({
+          name: name.trim(),
+          email: email.trim(),
+          password,
+          healthProfile: signupProfile
+        });
+
+        await updateHealthProfile(signupProfile);
       } else {
         await signIn({ email: email.trim(), password });
       }
@@ -59,11 +127,15 @@ export default function LoginRoute() {
   }
 
   return (
-    <AppShell title="Behavioral Health Login">
-      <View style={styles.screen}>
+    <AppShell title="Behavioral Health Login" keyboardAware>
+      <ScrollView contentContainerStyle={styles.screen} keyboardShouldPersistTaps="handled">
         <ScreenHeader
           title="Welcome"
-          description="Sign in to access your chat sessions and conversation history."
+          description={
+            isRegistering
+              ? "Create your account and complete your health profile intake."
+              : "Sign in to access your chat sessions and conversation history."
+          }
         />
 
         <Card title={isRegistering ? "Create Your Account" : "Welcome Back"}>
@@ -102,6 +174,33 @@ export default function LoginRoute() {
               onChangeText={setConfirmPassword}
             />
           ) : null}
+        </Card>
+
+        {isRegistering ? (
+          <>
+            <Card title="Personal Information">
+              <Input label="Gender" value={profile.gender} onChangeText={(value) => updateProfile("gender", value)} />
+              <Input label="Occupation (optional)" value={profile.occupation} onChangeText={(value) => updateProfile("occupation", value)} />
+            </Card>
+
+            <Card title="Health Baseline">
+              <Input label="Height" value={profile.height} onChangeText={(value) => updateProfile("height", value)} />
+              <Input label="Initial Weight" value={profile.initialWeight} onChangeText={(value) => updateProfile("initialWeight", value)} />
+              <Input label="Body Measurements (optional)" value={profile.bodyMeasurements} onChangeText={(value) => updateProfile("bodyMeasurements", value)} />
+              <Input label="Weight/Wellness Statement (optional)" value={profile.weightStatement} onChangeText={(value) => updateProfile("weightStatement", value)} multiline />
+            </Card>
+
+            <Card title="Health History">
+              <Text style={styles.hint}>If unknown, enter N/A.</Text>
+              <Input label="Allergy" value={profile.allergy} onChangeText={(value) => updateProfile("allergy", value)} />
+              <Input label="Medication" value={profile.medication} onChangeText={(value) => updateProfile("medication", value)} />
+              <Input label="Lifestyle" value={profile.lifestyle} onChangeText={(value) => updateProfile("lifestyle", value)} multiline />
+              <Input label="Medical History" value={profile.medicalHistory} onChangeText={(value) => updateProfile("medicalHistory", value)} multiline />
+            </Card>
+          </>
+        ) : null}
+
+        <Card title="Continue">
           <Button
             accessibilityLabel={isRegistering ? "Create Account" : "Log In"}
             onPress={handleAuth}
@@ -132,15 +231,15 @@ export default function LoginRoute() {
           </Pressable>
           <Text style={styles.statusText}>{status}</Text>
         </Card>
-      </View>
+      </ScrollView>
     </AppShell>
   );
 }
 
 const styles = StyleSheet.create({
   screen: {
-    flex: 1,
-    gap: 14
+    gap: 14,
+    paddingBottom: 24
   },
   switchText: {
     color: "#1d4ed8",
@@ -148,5 +247,13 @@ const styles = StyleSheet.create({
   },
   statusText: {
     color: "#334155"
+  },
+  hint: {
+    color: "#475569",
+    marginBottom: 4
   }
 });
+
+
+
+

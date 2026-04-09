@@ -1,4 +1,6 @@
+import json
 import sqlite3
+from datetime import date
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,6 +17,8 @@ from app.schemas import (
     CoachStateResponse,
     Conversation,
     ConversationCreate,
+    HealthProfile,
+    HealthProfileResponse,
     LessonDetail,
     LessonSummary,
     LoginRequest,
@@ -114,6 +118,9 @@ def register(
 ) -> LoginResponse:
     email = str(payload.email).lower()
     salt, password_hash = hash_password(payload.password)
+    profile_payload = payload.health_profile.model_dump() if payload.health_profile else {}
+    profile_payload.setdefault("register_date", date.today().isoformat())
+    profile_payload.setdefault("email", email)
 
     try:
         auth_user_id = store.create_auth_user(
@@ -121,6 +128,7 @@ def register(
             name=payload.name,
             password_salt=salt,
             password_hash=password_hash,
+            health_profile_json=json.dumps(profile_payload),
         )
     except sqlite3.IntegrityError as exc:
         raise HTTPException(
@@ -145,6 +153,28 @@ def register(
     )
 
 
+
+@router.get("/auth/profile", response_model=HealthProfileResponse)
+def get_health_profile(current_account: dict = Depends(get_current_account)) -> HealthProfileResponse:
+    profile_payload = store.get_health_profile_for_auth_user(int(current_account["id"]))
+    profile = HealthProfile(**profile_payload)
+    if not profile.email:
+        profile.email = str(current_account["email"])
+    return HealthProfileResponse(profile=profile)
+
+
+@router.put("/auth/profile", response_model=HealthProfileResponse)
+def update_health_profile(
+    payload: HealthProfile,
+    current_account: dict = Depends(get_current_account),
+) -> HealthProfileResponse:
+    profile_payload = payload.model_dump()
+    if not profile_payload.get("email"):
+        profile_payload["email"] = str(current_account["email"])
+    if not profile_payload.get("register_date"):
+        profile_payload["register_date"] = date.today().isoformat()
+    store.update_health_profile_for_auth_user(int(current_account["id"]), profile_payload)
+    return HealthProfileResponse(profile=HealthProfile(**profile_payload))
 @router.get("/lessons", response_model=list[LessonSummary])
 def list_lessons(
     current_account: dict = Depends(get_current_account),
@@ -315,3 +345,5 @@ def create_assistant_reply(
 
 
 app.include_router(router)
+
+

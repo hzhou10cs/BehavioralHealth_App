@@ -34,6 +34,7 @@ class SQLiteHealthChatStore:
                 email TEXT NOT NULL UNIQUE,
                 name TEXT NOT NULL DEFAULT '',
                 user_id INTEGER,
+                health_profile_json TEXT NOT NULL DEFAULT '{}',
                 password_salt TEXT NOT NULL,
                 password_hash TEXT NOT NULL,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -132,6 +133,8 @@ class SQLiteHealthChatStore:
             self.conn.execute("ALTER TABLE auth_users ADD COLUMN name TEXT NOT NULL DEFAULT ''")
         if "user_id" not in auth_user_columns:
             self.conn.execute("ALTER TABLE auth_users ADD COLUMN user_id INTEGER")
+        if "health_profile_json" not in auth_user_columns:
+            self.conn.execute("ALTER TABLE auth_users ADD COLUMN health_profile_json TEXT NOT NULL DEFAULT '{}'")
         self.conn.execute(
             """
             UPDATE auth_users
@@ -268,15 +271,16 @@ class SQLiteHealthChatStore:
         name: str,
         password_salt: str,
         password_hash: str,
+        health_profile_json: str = '{}',
     ) -> int:
         normalized_email = email.lower()
         user_id = self.ensure_user(self._auth_user_key(normalized_email))
         cur = self.conn.execute(
             """
-            INSERT INTO auth_users (email, name, user_id, password_salt, password_hash)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO auth_users (email, name, user_id, password_salt, password_hash, health_profile_json)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (normalized_email, name.strip(), user_id, password_salt, password_hash),
+            (normalized_email, name.strip(), user_id, password_salt, password_hash, health_profile_json),
         )
         self.ensure_lesson_progress_for_user(user_id)
         self.conn.commit()
@@ -285,7 +289,7 @@ class SQLiteHealthChatStore:
     def get_auth_user_by_email(self, email: str) -> dict[str, Any] | None:
         row = self.conn.execute(
             """
-            SELECT id, email, name, user_id, password_salt, password_hash, created_at
+            SELECT id, email, name, user_id, password_salt, password_hash, health_profile_json, created_at
             FROM auth_users
             WHERE email = ?
             """,
@@ -296,13 +300,41 @@ class SQLiteHealthChatStore:
     def get_auth_user_by_id(self, auth_user_id: int) -> dict[str, Any] | None:
         row = self.conn.execute(
             """
-            SELECT id, email, name, user_id, password_salt, password_hash, created_at
+            SELECT id, email, name, user_id, password_salt, password_hash, health_profile_json, created_at
             FROM auth_users
             WHERE id = ?
             """,
             (auth_user_id,),
         ).fetchone()
         return dict(row) if row is not None else None
+    def get_health_profile_for_auth_user(self, auth_user_id: int) -> dict[str, Any]:
+        row = self.conn.execute(
+            """
+            SELECT health_profile_json
+            FROM auth_users
+            WHERE id = ?
+            """,
+            (auth_user_id,),
+        ).fetchone()
+        if row is None:
+            return {}
+        try:
+            return json.loads(str(row["health_profile_json"] or "{}"))
+        except Exception:
+            return {}
+
+    def update_health_profile_for_auth_user(
+        self, auth_user_id: int, payload: dict[str, Any]
+    ) -> None:
+        self.conn.execute(
+            """
+            UPDATE auth_users
+            SET health_profile_json = ?
+            WHERE id = ?
+            """,
+            (json.dumps(payload), auth_user_id),
+        )
+        self.conn.commit()
 
     def list_lessons_for_user(self, user_id: int) -> list[dict[str, Any]]:
         self.ensure_lesson_progress_for_user(user_id)
@@ -609,3 +641,4 @@ class SQLiteHealthChatStore:
         )
 
         return user_root
+
