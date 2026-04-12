@@ -1,7 +1,10 @@
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+BACKEND_ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
 
 
 class Settings(BaseSettings):
@@ -29,7 +32,7 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_prefix="BHA_",
-        env_file=".env",
+        env_file=str(BACKEND_ENV_PATH),
         extra="ignore",
     )
 
@@ -37,6 +40,12 @@ class Settings(BaseSettings):
     def apply_openai_defaults(self) -> "Settings":
         default_stub_base_url = "http://127.0.0.1:8001"
         default_stub_model = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+        normalized_base_url = self.assistant_llm_base_url.strip()
+
+        if not normalized_base_url:
+            self.assistant_llm_base_url = default_stub_base_url
+        else:
+            self.assistant_llm_base_url = normalized_base_url
 
         if (
             not self.assistant_test_mode

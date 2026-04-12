@@ -19,6 +19,10 @@ export function logStep(message) {
   process.stdout.write(`${message}\n`);
 }
 
+export function warnStep(message) {
+  process.stdout.write(`Warning: ${message}\n`);
+}
+
 function psQuote(value) {
   return `'${String(value).replace(/'/g, "''")}'`;
 }
@@ -63,11 +67,34 @@ function isPrivateIpv4(ip) {
   );
 }
 
-export function detectLanIp() {
+function scoreInterface(name, address) {
+  const lowerName = String(name).toLowerCase();
+  let score = 0;
+
+  if (isPrivateIpv4(address)) {
+    score += 100;
+  }
+  if (/(wi-?fi|wlan|wireless)/.test(lowerName)) {
+    score += 50;
+  }
+  if (/(ethernet|en\d)/.test(lowerName)) {
+    score += 25;
+  }
+  if (/(virtual|vmware|hyper-v|vbox|virtualbox|loopback|bluetooth)/.test(lowerName)) {
+    score -= 100;
+  }
+  if (/^192\.168\.56\./.test(address)) {
+    score -= 100;
+  }
+
+  return score;
+}
+
+export function listLanCandidates() {
   const interfaces = os.networkInterfaces();
   const candidates = [];
 
-  for (const entries of Object.values(interfaces)) {
+  for (const [name, entries] of Object.entries(interfaces)) {
     if (!entries) {
       continue;
     }
@@ -76,12 +103,87 @@ export function detectLanIp() {
       if (entry.family !== "IPv4" || entry.internal) {
         continue;
       }
-      candidates.push(entry.address);
+      candidates.push({
+        name,
+        address: entry.address,
+        score: scoreInterface(name, entry.address),
+        isPrivate: isPrivateIpv4(entry.address)
+      });
     }
   }
 
-  const privateIp = candidates.find(isPrivateIpv4);
-  return privateIp ?? candidates[0] ?? null;
+  candidates.sort((a, b) => b.score - a.score);
+  return candidates;
+}
+
+export function detectLanIp() {
+  const candidates = listLanCandidates();
+  return candidates[0]?.address ?? null;
+}
+
+export function validatePhoneApiUrl(apiUrl) {
+  let parsedUrl;
+
+  try {
+    parsedUrl = new URL(apiUrl);
+  } catch {
+    return {
+      ok: false,
+      message: `frontend/.env has an invalid EXPO_PUBLIC_API_URL: ${apiUrl}`
+    };
+  }
+
+  const candidates = listLanCandidates();
+  const bestCandidate = candidates[0] ?? null;
+  const matchingCandidate = candidates.find(
+    (candidate) => candidate.address === parsedUrl.hostname
+  );
+
+  if (!matchingCandidate) {
+    return {
+      ok: false,
+      message:
+        `frontend/.env points to ${parsedUrl.hostname}, but that IP was not found on this machine. ` +
+        `Run \`npm run check:phone\` to resync the phone API URL.`,
+      candidates
+    };
+  }
+
+  if (!matchingCandidate.isPrivate) {
+    return {
+      ok: false,
+      message:
+        `frontend/.env points to ${matchingCandidate.address}, but that is not a private LAN IP. ` +
+        `Use \`npm run check:phone\` to select a phone-reachable address.`,
+      candidates
+    };
+  }
+
+  if (matchingCandidate.score < 50) {
+    return {
+      ok: false,
+      message:
+        `frontend/.env points to ${matchingCandidate.address} on ${matchingCandidate.name}, ` +
+        `which looks like a low-confidence or virtual adapter. Run \`npm run check:phone\` to resync.`,
+      candidates
+    };
+  }
+
+  if (bestCandidate && bestCandidate.address !== matchingCandidate.address) {
+    return {
+      ok: false,
+      message:
+        `frontend/.env points to ${matchingCandidate.address}, but the best LAN candidate is ` +
+        `${bestCandidate.address} on ${bestCandidate.name}. Run \`npm run check:phone\` to resync.`,
+      candidates
+    };
+  }
+
+  return {
+    ok: true,
+    selected: matchingCandidate,
+    candidates
+  };
 }
 
 export function ensureFrontendEnv({ phone = false, syncApiUrl = false } = {}) {
@@ -167,9 +269,15 @@ export function checkFrontendDependencies() {
 export function checkFrontendEnv({ phone = false, syncApiUrl = false } = {}) {
   const result = ensureFrontendEnv({ phone, syncApiUrl });
   if (phone && /127\.0\.0\.1|localhost/.test(result.url)) {
-    fail(
+    warnStep(
       "Phone mode needs a LAN API URL, but frontend/.env points to localhost. Update EXPO_PUBLIC_API_URL to your computer's local IP."
     );
+  }
+  if (phone) {
+    const validation = validatePhoneApiUrl(result.url);
+    if (!validation.ok) {
+      warnStep(validation.message);
+    }
   }
   return result;
 }

@@ -41,3 +41,16 @@ def test_legacy_auth_token_env_alias_still_works(monkeypatch):
     assert settings.auth_secret_key == "legacy-secret"
 
     get_settings.cache_clear()
+
+
+def test_blank_base_url_switches_to_openai_when_test_mode_disabled(monkeypatch):
+    monkeypatch.setenv("BHA_ASSISTANT_TEST_MODE", "false")
+    monkeypatch.setenv("BHA_ASSISTANT_LLM_API_KEY", "test-key")
+    monkeypatch.setenv("BHA_ASSISTANT_LLM_BASE_URL", "")
+    get_settings.cache_clear()
+
+    settings = get_settings()
+
+    assert settings.assistant_llm_base_url == "https://api.openai.com"
+
+    get_settings.cache_clear()

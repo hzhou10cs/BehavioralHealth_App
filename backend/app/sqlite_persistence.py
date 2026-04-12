@@ -268,19 +268,20 @@ class SQLiteHealthChatStore:
     def create_auth_user(
         self,
         email: str,
-        name: str,
         password_salt: str,
         password_hash: str,
+        name: str = "",
         health_profile_json: str = '{}',
     ) -> int:
         normalized_email = email.lower()
+        resolved_name = name.strip() or normalized_email.partition("@")[0] or normalized_email
         user_id = self.ensure_user(self._auth_user_key(normalized_email))
         cur = self.conn.execute(
             """
             INSERT INTO auth_users (email, name, user_id, password_salt, password_hash, health_profile_json)
             VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (normalized_email, name.strip(), user_id, password_salt, password_hash, health_profile_json),
+            (normalized_email, resolved_name, user_id, password_salt, password_hash, health_profile_json),
         )
         self.ensure_lesson_progress_for_user(user_id)
         self.conn.commit()

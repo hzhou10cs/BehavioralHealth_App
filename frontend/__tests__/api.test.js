@@ -1,12 +1,14 @@
 const {
   fetchLesson,
   fetchLessons,
+  fetchHealthProfile,
   fetchChatHistory,
   fetchMessages,
   login,
   register,
   resetClientStateForTests,
-  sendMessage
+  sendMessage,
+  updateHealthProfile
 } = require("../lib/api");
 
 function createResponse({ ok = true, status = 200, json }) {
@@ -107,6 +109,149 @@ describe("frontend api client", () => {
     expect(result).toEqual({
       accessToken: "development-token",
       userName: "alex"
+    });
+  });
+
+  it("loads the saved health profile from the backend", async () => {
+    const fetchMock = global.fetch;
+    await loginWith(fetchMock);
+
+    fetchMock.mockResolvedValueOnce(
+      createResponse({
+        json: {
+          profile: {
+            first_name: "Alex",
+            last_name: "Parker",
+            gender: "Female",
+            occupation: "Teacher",
+            phone: "555-111-2222",
+            email: "alex@example.com",
+            height: "5ft 7in",
+            initial_weight: "160",
+            body_measurements: "Waist 32",
+            weight_statement: "Wants more energy",
+            allergy: "Pollen",
+            medication: "Inhaler",
+            lifestyle: "Daily walks",
+            medical_history: "Asthma",
+            register_date: "2026-04-12"
+          }
+        }
+      })
+    );
+
+    const result = await fetchHealthProfile();
+
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "http://127.0.0.1:8000/auth/profile",
+      expect.objectContaining({
+        headers: expect.any(Headers)
+      })
+    );
+    expect(result).toEqual({
+      firstName: "Alex",
+      lastName: "Parker",
+      gender: "Female",
+      occupation: "Teacher",
+      phone: "555-111-2222",
+      email: "alex@example.com",
+      height: "5ft 7in",
+      initialWeight: "160",
+      bodyMeasurements: "Waist 32",
+      weightStatement: "Wants more energy",
+      allergy: "Pollen",
+      medication: "Inhaler",
+      lifestyle: "Daily walks",
+      medicalHistory: "Asthma",
+      registerDate: "2026-04-12"
+    });
+  });
+
+  it("updates the health profile through the backend and maps the saved response", async () => {
+    const fetchMock = global.fetch;
+    await loginWith(fetchMock);
+
+    fetchMock.mockResolvedValueOnce(
+      createResponse({
+        json: {
+          profile: {
+            first_name: "Alex",
+            last_name: "Parker",
+            gender: "Female",
+            occupation: "Teacher",
+            phone: "555-111-2222",
+            email: "alex@example.com",
+            height: "5ft 7in",
+            initial_weight: "160",
+            body_measurements: "Waist 32",
+            weight_statement: "Wants more energy",
+            allergy: "Pollen",
+            medication: "Inhaler",
+            lifestyle: "Daily walks",
+            medical_history: "Asthma",
+            register_date: "2026-04-12"
+          }
+        }
+      })
+    );
+
+    const result = await updateHealthProfile({
+      firstName: "Alex",
+      lastName: "Parker",
+      gender: "Female",
+      occupation: "Teacher",
+      phone: "555-111-2222",
+      email: "alex@example.com",
+      height: "5ft 7in",
+      initialWeight: "160",
+      bodyMeasurements: "Waist 32",
+      weightStatement: "Wants more energy",
+      allergy: "Pollen",
+      medication: "Inhaler",
+      lifestyle: "Daily walks",
+      medicalHistory: "Asthma",
+      registerDate: "2026-04-12"
+    });
+
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "http://127.0.0.1:8000/auth/profile",
+      expect.objectContaining({
+        method: "PUT",
+        body: JSON.stringify({
+          first_name: "Alex",
+          last_name: "Parker",
+          gender: "Female",
+          occupation: "Teacher",
+          phone: "555-111-2222",
+          email: "alex@example.com",
+          height: "5ft 7in",
+          initial_weight: "160",
+          body_measurements: "Waist 32",
+          weight_statement: "Wants more energy",
+          allergy: "Pollen",
+          medication: "Inhaler",
+          lifestyle: "Daily walks",
+          medical_history: "Asthma",
+          register_date: "2026-04-12"
+        })
+      })
+    );
+    expect(result).toEqual({
+      firstName: "Alex",
+      lastName: "Parker",
+      gender: "Female",
+      occupation: "Teacher",
+      phone: "555-111-2222",
+      email: "alex@example.com",
+      height: "5ft 7in",
+      initialWeight: "160",
+      bodyMeasurements: "Waist 32",
+      weightStatement: "Wants more energy",
+      allergy: "Pollen",
+      medication: "Inhaler",
+      lifestyle: "Daily walks",
+      medicalHistory: "Asthma",
+      registerDate: "2026-04-12"
     });
   });
 

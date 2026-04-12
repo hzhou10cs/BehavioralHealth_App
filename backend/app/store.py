@@ -100,7 +100,11 @@ class SQLiteAppStore:
         health_profile_json: str = "{}",
     ) -> int:
         return self._db.create_auth_user(
-            email, name, password_salt, password_hash, health_profile_json
+            email=email,
+            password_salt=password_salt,
+            password_hash=password_hash,
+            name=name,
+            health_profile_json=health_profile_json,
         )
 
     def get_health_profile_for_auth_user(self, auth_user_id: int) -> dict:

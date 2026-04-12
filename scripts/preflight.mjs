@@ -3,6 +3,7 @@ import {
   checkFrontendDependencies,
   checkFrontendEnv,
   detectLanIp,
+  listLanCandidates,
   logStep
 } from "./common.mjs";
 
@@ -31,7 +32,12 @@ if (!backendOnly) {
 
 if (phone) {
   const lanIp = detectLanIp();
+  const candidates = listLanCandidates();
+  const selected = candidates[0];
   logStep(`Detected LAN IP: ${lanIp ?? "not found"}`);
+  if (selected) {
+    logStep(`Selected interface: ${selected.name} (${selected.address})`);
+  }
 }
 
 logStep("Preflight check passed.");

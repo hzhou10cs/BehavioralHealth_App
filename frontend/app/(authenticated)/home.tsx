@@ -38,7 +38,10 @@ export default function HomeRoute() {
           <Button accessibilityLabel="Open History" onPress={() => router.push("/history")}>
             Open History
           </Button>
-          <Button accessibilityLabel="Open Health Profile" onPress={() => router.push("/profile")}>
+          <Button
+            accessibilityLabel="Open Health Profile"
+            onPress={() => router.push("../profile")}
+          >
             Open Health Profile
           </Button>
         </Card>

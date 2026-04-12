@@ -9,6 +9,7 @@ BehavioralHealth App is a full-stack project with:
 
 Current capabilities include:
 - registering and logging in
+- capturing and editing a health intake profile during and after registration
 - creating and listing conversations
 - sending messages
 - generating an assistant reply from the backend
@@ -16,98 +17,6 @@ Current capabilities include:
 - navigating between dedicated app screens with Expo Router
 - tracking coach state from conversation updates
 - generating session report memory for later assistant replies
-
-## Quickstart
-
-Use this section for the three main ways to run the project, in priority order.
-
-If you plan to use either Docker workflow below, install Docker Desktop first:
-- Download: `https://www.docker.com/products/docker-desktop/`
-- Verify: `docker --version` and `docker compose version`
-
-### 1. Mobile Workflow: Docker Backend + Local Frontend
-
-Use this when you want the primary phone-testing workflow for the app.
-
-1. Start the backend in Docker:
-
-```powershell
-docker compose up --build backend
-```
-
-2. In a second terminal, start the Expo frontend for phone mode:
-
-```powershell
-npm run check:phone
-npm run frontend:phone
-```
-
-3. Open Expo Go on your phone and scan the QR code.
-
-What to expect:
-- the backend is available on port `8000`
-- the frontend syncs `frontend/.env` to your current LAN IP
-- Expo starts in LAN mode for phone testing
-- your phone should be able to reach `http://YOUR_LOCAL_IP:8000/health`
-
-### 2. Integrated Docker Stack: Frontend + Backend
-
-Use this when you want the quickest reproducible integrated environment on one machine.
-
-```powershell
-docker compose up --build
-```
-
-Then open:
-- `http://127.0.0.1:8080` for the frontend
-- `http://127.0.0.1:8000/docs` for backend Swagger
-
-Important:
-- this Docker stack serves the frontend as a web app for integrated testing
-- the mobile app workflow still uses Expo locally
-
-### 3. Fully Local Development
-
-Use this when you want both the backend and frontend running locally.
-
-Windows PowerShell:
-
-```powershell
-cd backend
-py -3.13 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip setuptools wheel
-python -m pip install -r requirements-dev.txt
-cd ..
-cd frontend
-npm install
-cd ..
-npm run check
-npm run app
-```
-
-macOS / Linux / Git Bash:
-
-```bash
-cd backend
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip setuptools wheel
-python -m pip install -r requirements-dev.txt
-cd ..
-cd frontend
-npm install
-cd ..
-npm run check
-npm run app
-```
-
-What to expect:
-- the backend starts on `http://127.0.0.1:8000`
-- Expo starts in a second process for the frontend
-- the app opens to the login screen, then routes to Home, Chat, and History after authentication
-
-The detailed sections below follow this same order: phone workflow first, integrated Docker second, and fully local development third.
 
 ## Prerequisites
 
@@ -137,6 +46,136 @@ Notes:
 - If PowerShell blocks `npm`, use `npm.cmd` instead of `npm`.
 - Docker is optional unless you want the Docker setup paths below.
 
+## First-Time Setup
+
+Use this section once on a new machine before following any Quickstart path.
+
+### Windows PowerShell
+
+```powershell
+cd backend
+py -3.13 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip setuptools wheel
+python -m pip install -r requirements-dev.txt
+cd ..
+cd frontend
+npm.cmd install
+cd ..
+```
+
+Optional env files:
+
+```powershell
+Copy-Item backend\.env.example backend\.env
+Copy-Item frontend\.env.example frontend\.env
+```
+
+### macOS / Linux / Git Bash
+
+```bash
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip setuptools wheel
+python -m pip install -r requirements-dev.txt
+cd ..
+cd frontend
+npm install
+cd ..
+```
+
+Optional env files:
+
+```bash
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env
+```
+
+Optional OpenAI setup:
+- The app runs without OpenAI access. If you skip this, the backend stays in safe local test mode and chat replies use the built-in stub behavior.
+- To use OpenAI for real assistant replies, update `backend/.env` with:
+
+```env
+BHA_ASSISTANT_TEST_MODE=false
+OPENAI_API_KEY=YOUR_OPENAI_API_KEY
+BHA_ASSISTANT_MODEL_NAME=gpt-4.1-mini
+```
+
+Phone-testing extras:
+- Install Expo Go on your phone.
+
+## Quickstart
+
+Use this section for the three main ways to run the project, in priority order after completing First-Time Setup.
+
+### 1. Mobile Workflow: Docker Backend + Local Frontend
+
+Use this when you want the primary phone-testing workflow for the app.
+
+1. Start the backend in Docker:
+
+```powershell
+docker compose up --build backend
+```
+
+2. In a second terminal, start the Expo frontend for phone mode:
+
+```powershell
+npm.cmd run check:frontend:phone
+npm.cmd run frontend:phone
+```
+
+3. Open Expo Go on your phone and scan the QR code.
+
+What to expect:
+- the backend is available on port `8000`
+- the frontend syncs `frontend/.env` to your current LAN IP
+- the frontend preflight checks only the frontend requirements for this Docker-backed flow
+- Expo starts in LAN mode for phone testing
+- your phone should be able to reach `http://YOUR_LOCAL_IP:8000/health`
+
+### 2. Integrated Docker Stack: Frontend + Backend
+
+Use this when you want the quickest reproducible integrated environment on one machine.
+
+```powershell
+docker compose up --build
+```
+
+Then open:
+- `http://127.0.0.1:8080` for the frontend
+- `http://127.0.0.1:8000/docs` for backend Swagger
+
+Important:
+- this Docker stack serves the frontend as a web app for integrated testing
+- the mobile app workflow still uses Expo locally
+
+### 3. Fully Local Development
+
+Use this when you want both the backend and frontend running locally.
+
+Windows PowerShell:
+
+```powershell
+npm.cmd run check
+npm.cmd run app
+```
+
+macOS / Linux / Git Bash:
+
+```bash
+npm run check
+npm run app
+```
+
+What to expect:
+- the backend starts on `http://127.0.0.1:8000`
+- Expo starts in a second process for the frontend
+- the app opens to the login screen, then routes to Home, Chat, and History after authentication
+
+The detailed sections below follow this same order: phone workflow first, integrated Docker second, and fully local development third.
+
 ## Phone Testing
 
 Use this when testing the mobile app with Expo Go.
@@ -149,13 +188,14 @@ Use this path when both your phone and computer are on the same Wi-Fi network.
 2. From the repo root, run:
 
 ```powershell
-npm run check:phone
-npm run app:phone
+npm.cmd run check:phone
+npm.cmd run app:phone
 ```
 
 What these commands do:
 - detect your local network IP address
 - update `frontend/.env` to use that IP for `EXPO_PUBLIC_API_URL`
+- warn if the selected phone API URL looks like a virtual or low-confidence adapter
 - start the backend on `0.0.0.0`
 - start Expo in LAN mode
 
@@ -165,7 +205,7 @@ If Expo LAN mode fails on your network, try:
 
 ```powershell
 cd frontend
-npm start -- --tunnel
+npm.cmd start -- --tunnel
 ```
 
 ### Phone Testing With Docker Backend
@@ -181,9 +221,11 @@ docker compose up --build backend
 2. In a second terminal:
 
 ```powershell
-npm run check:phone
-npm run frontend:phone
+npm.cmd run check:frontend:phone
+npm.cmd run frontend:phone
 ```
+
+This path uses the frontend-only phone preflight because the backend is already running in Docker.
 
 3. On your phone browser, open:
 
@@ -215,9 +257,7 @@ docker compose up --build backend
 Then in a second terminal:
 
 ```powershell
-.\run_backend.ps1 -Phone
 .\run_frontend.ps1 -Phone
-.\run_app.ps1 -Phone
 ```
 
 macOS / Linux / Git Bash:
@@ -229,9 +269,7 @@ docker compose up --build backend
 Then in a second terminal:
 
 ```bash
-./run_backend.sh --phone
 ./run_frontend.sh --phone
-./run_app.sh --phone
 ```
 
 ## Docker Testing
@@ -344,31 +382,14 @@ cp .env.example .env
 ```
 
 The backend `.env` file controls the chat-agent service configuration.
+It is loaded from `backend/.env` even when you start the app from the repo root with `npm run app` or `npm run app:phone`.
+If you do not configure OpenAI, the app still runs in local test mode with stub chat replies.
 
-Default local behavior:
-- `BHA_ASSISTANT_TEST_MODE=true`
-- the assistant stays in safe local stub mode
-
-### Configure OpenAI Access
-
-To switch the backend from stub mode to OpenAI, update `backend/.env`:
-
-```env
-BHA_ASSISTANT_TEST_MODE=false
-OPENAI_API_KEY=YOUR_OPENAI_API_KEY
-BHA_ASSISTANT_MODEL_NAME=gpt-4.1-mini
-```
-
-Optional explicit settings:
-
-```env
-BHA_ASSISTANT_LLM_BASE_URL=https://api.openai.com
-BHA_ASSISTANT_LLM_API_KEY=YOUR_OPENAI_API_KEY
-```
-
-Notes:
+OpenAI notes:
 - `OPENAI_API_KEY` works directly in this backend as a convenience alias.
+- `BHA_ASSISTANT_LLM_API_KEY` also works if you prefer the explicit backend-prefixed setting.
 - If you turn test mode off and keep the old stub defaults, the backend automatically switches to `https://api.openai.com` and `gpt-4.1-mini`.
+- A blank `BHA_ASSISTANT_LLM_BASE_URL` is also treated as the default OpenAI path when test mode is off and an API key is present.
 - You can still point `BHA_ASSISTANT_LLM_BASE_URL` at any other OpenAI-compatible service.
 
 SQLite details:
@@ -382,7 +403,7 @@ Install dependencies from the `frontend` folder:
 
 ```powershell
 cd frontend
-npm install
+npm.cmd install
 ```
 
 Optional frontend env file:
@@ -401,7 +422,9 @@ cp .env.example .env
 
 Root tooling behavior:
 - `npm run check`, `npm run frontend`, and `npm run app` keep `frontend/.env` in localhost mode
-- `npm run check:phone`, `npm run frontend:phone`, and `npm run app:phone` sync `frontend/.env` to your current LAN IP
+- `npm run check:phone`, `npm run frontend:phone`, and `npm run app:phone` sync `frontend/.env` to your current LAN IP for the full local phone workflow
+- `npm run check:frontend:phone` is the frontend-only preflight for the Docker-backend phone workflow
+- `npm run check:phone` and `npm run check:frontend:phone` print the selected interface and warn, but do not fail, if the detected phone API URL looks suspicious
 
 The frontend uses Expo Router:
 - runtime entry point: `expo-router/entry`
@@ -412,13 +435,14 @@ The frontend uses Expo Router:
 From the repo root:
 
 ```powershell
-npm run check
-npm run app
+npm.cmd run check
+npm.cmd run app
 ```
 
 These root commands do:
 - `npm run check`: verifies the backend virtual environment, frontend Expo dependencies, and syncs the frontend backend URL to localhost
 - `npm run app`: starts backend and frontend together
+- `npm run check:frontend:phone`: verifies frontend dependencies only and syncs the frontend backend URL to your LAN IP
 
 If you prefer helper scripts:
 
@@ -452,21 +476,21 @@ Run only the frontend:
 
 ```powershell
 cd frontend
-npm start -- --host localhost
+npm.cmd start -- --host localhost
 ```
 
 For the browser:
 
 ```powershell
 cd frontend
-npm run web
+npm.cmd run web
 ```
 
 If Expo appears stale after a routing change:
 
 ```powershell
 cd frontend
-npm start -- --clear
+npm.cmd start -- --clear
 ```
 
 ## Running Automated Tests
@@ -482,7 +506,7 @@ python -m pytest -q
 ```
 
 Current expected result:
-- `29 passed`
+- `33 passed`
 
 To run only the standalone SQLite persistence unit tests:
 
@@ -498,12 +522,13 @@ From the repo root in Windows PowerShell:
 
 ```powershell
 cd frontend
-npm test
+npm.cmd test
 ```
 
 These tests verify that:
 - the frontend calls the backend API client correctly
 - backend responses are mapped into frontend data correctly
+- registration and health-profile API flows map correctly
 - the routed app UI updates after login, sending a message, and opening history
 
 ### Frontend Type Check
@@ -512,13 +537,13 @@ From the repo root in Windows PowerShell:
 
 ```powershell
 cd frontend
-npm run typecheck
+npm.cmd run typecheck
 ```
 
 ## Troubleshooting
 
 `expo is not recognized`
-- Run `npm install` in the `frontend` folder first.
+- Run `npm.cmd install` in the `frontend` folder first on Windows, or `npm install` on macOS/Linux.
 
 `npm.ps1 cannot be loaded` in PowerShell
 - PowerShell is blocking the npm script shim on this machine.
@@ -534,7 +559,9 @@ npm run typecheck
 - Make sure `EXPO_PUBLIC_API_URL` points to the correct backend address.
 - If you are using a real phone, start the backend on `0.0.0.0`.
 - Make sure the phone and computer are on the same network.
-- Prefer `npm run check:phone` and `npm run app:phone` so the frontend URL is synced automatically.
+- Prefer `npm run check:phone` and `npm run app:phone` for the full local phone workflow.
+- Prefer `npm run check:frontend:phone` and `npm run frontend:phone` when the backend is already running in Docker.
+- If `npm run check:phone` warns about a suspicious adapter IP, prefer the Wi-Fi interface it reports for phone testing.
 - If you previously used phone mode, `frontend/.env` may still point to your LAN IP. Switch it back to `http://127.0.0.1:8000` for same-machine testing if needed.
 
 `Unsupported platform: 312` while installing backend dependencies
@@ -556,7 +583,8 @@ npm run typecheck
 
 `failed to start tunnel`
 - Expo tunnel issues are often temporary.
-- Try `npm start -- --host localhost` first, or use `npm run app:phone` for the LAN workflow.
+- Try `npm.cmd start -- --host localhost` first on Windows, or `npm start -- --host localhost` on macOS/Linux.
+- Use `npm run app:phone` for the normal LAN workflow.
 
 ## Project Structure
 

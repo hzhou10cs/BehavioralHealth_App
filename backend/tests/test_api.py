@@ -1,3 +1,5 @@
+from datetime import date
+
 import app.main as main_module
 
 from app.store import SQLiteAppStore
@@ -67,6 +69,83 @@ def test_auth_login_invalid_credentials(client):
     )
     assert response.status_code == 401
     assert response.json()["detail"] == "Invalid credentials"
+
+
+def test_auth_register_stores_health_profile_and_exposes_it(client):
+    response = client.post(
+        "/auth/register",
+        json={
+            "name": "Alex Parker",
+            "email": "alex@example.com",
+            "password": "password123",
+            "health_profile": {
+                "gender": "Female",
+                "height": "5ft 7in",
+                "initial_weight": "165",
+                "allergy": "Peanuts",
+                "medication": "Vitamin D",
+                "lifestyle": "Walks after dinner",
+                "medical_history": "Asthma"
+            },
+        },
+    )
+
+    assert response.status_code == 201
+    token = response.json()["access_token"]
+
+    profile_response = client.get("/auth/profile", headers=auth_headers(token))
+
+    assert profile_response.status_code == 200
+    profile = profile_response.json()["profile"]
+    assert profile["gender"] == "Female"
+    assert profile["height"] == "5ft 7in"
+    assert profile["initial_weight"] == "165"
+    assert profile["allergy"] == "Peanuts"
+    assert profile["medication"] == "Vitamin D"
+    assert profile["lifestyle"] == "Walks after dinner"
+    assert profile["medical_history"] == "Asthma"
+    assert profile["email"] == "alex@example.com"
+    assert profile["register_date"] == date.today().isoformat()
+
+
+def test_auth_profile_update_round_trips_saved_health_info(client):
+    auth = register_user(client, "alex@example.com")
+    headers = auth_headers(auth["access_token"])
+
+    update = client.put(
+        "/auth/profile",
+        headers=headers,
+        json={
+            "first_name": "Alex",
+            "last_name": "Parker",
+            "gender": "Female",
+            "occupation": "Teacher",
+            "phone": "555-111-2222",
+            "email": "",
+            "height": "5ft 7in",
+            "initial_weight": "160",
+            "body_measurements": "Waist 32",
+            "weight_statement": "Wants more energy",
+            "allergy": "Pollen",
+            "medication": "Inhaler",
+            "lifestyle": "Daily walks",
+            "medical_history": "Asthma",
+            "register_date": "",
+        },
+    )
+
+    assert update.status_code == 200
+    updated_profile = update.json()["profile"]
+    assert updated_profile["first_name"] == "Alex"
+    assert updated_profile["last_name"] == "Parker"
+    assert updated_profile["occupation"] == "Teacher"
+    assert updated_profile["phone"] == "555-111-2222"
+    assert updated_profile["email"] == "alex@example.com"
+    assert updated_profile["register_date"] == date.today().isoformat()
+
+    fetched = client.get("/auth/profile", headers=headers)
+    assert fetched.status_code == 200
+    assert fetched.json()["profile"] == updated_profile
 
 
 def test_conversation_routes_require_bearer_auth(client):

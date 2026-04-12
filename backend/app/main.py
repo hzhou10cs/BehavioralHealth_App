@@ -119,8 +119,10 @@ def register(
     email = str(payload.email).lower()
     salt, password_hash = hash_password(payload.password)
     profile_payload = payload.health_profile.model_dump() if payload.health_profile else {}
-    profile_payload.setdefault("register_date", date.today().isoformat())
-    profile_payload.setdefault("email", email)
+    if not profile_payload.get("register_date"):
+        profile_payload["register_date"] = date.today().isoformat()
+    if not profile_payload.get("email"):
+        profile_payload["email"] = email
 
     try:
         auth_user_id = store.create_auth_user(
@@ -160,6 +162,8 @@ def get_health_profile(current_account: dict = Depends(get_current_account)) -> 
     profile = HealthProfile(**profile_payload)
     if not profile.email:
         profile.email = str(current_account["email"])
+    if not profile.register_date:
+        profile.register_date = date.today().isoformat()
     return HealthProfileResponse(profile=profile)
 
 
