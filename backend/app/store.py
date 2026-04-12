@@ -92,9 +92,26 @@ class SQLiteAppStore:
         return self._db.get_auth_user_by_id(auth_user_id)
 
     def create_auth_user(
-        self, email: str, name: str, password_salt: str, password_hash: str
+        self,
+        email: str,
+        name: str,
+        password_salt: str,
+        password_hash: str,
+        health_profile_json: str = "{}",
     ) -> int:
-        return self._db.create_auth_user(email, name, password_salt, password_hash)
+        return self._db.create_auth_user(
+            email=email,
+            password_salt=password_salt,
+            password_hash=password_hash,
+            name=name,
+            health_profile_json=health_profile_json,
+        )
+
+    def get_health_profile_for_auth_user(self, auth_user_id: int) -> dict:
+        return self._db.get_health_profile_for_auth_user(auth_user_id)
+
+    def update_health_profile_for_auth_user(self, auth_user_id: int, payload: dict) -> None:
+        self._db.update_health_profile_for_auth_user(auth_user_id, payload)
 
     def list_lessons(self, *, user_id: int | None = None) -> list[LessonSummary]:
         return [
@@ -200,3 +217,4 @@ class SQLiteAppStore:
 
 def build_store(settings: Settings) -> SQLiteAppStore:
     return SQLiteAppStore(settings.sqlite_db_path)
+

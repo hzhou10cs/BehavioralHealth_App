@@ -7,17 +7,38 @@ class LoginRequest(BaseModel):
     email: EmailStr
     password: str = Field(min_length=6)
 
+class HealthProfile(BaseModel):
+    first_name: str = ""
+    last_name: str = ""
+    gender: str = ""
+    occupation: str = ""
+    phone: str = ""
+    email: str = ""
+    height: str = ""
+    initial_weight: str = ""
+    body_measurements: str = ""
+    weight_statement: str = ""
+    allergy: str = "N/A"
+    medication: str = "N/A"
+    lifestyle: str = "N/A"
+    medical_history: str = "N/A"
+    register_date: str = ""
 
 class RegisterRequest(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     email: EmailStr
     password: str = Field(min_length=6)
+    health_profile: HealthProfile | None = None
 
 
 class LoginResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user_name: str
+
+
+class HealthProfileResponse(BaseModel):
+    profile: HealthProfile
 
 
 class LessonActivityField(BaseModel):
@@ -89,3 +110,5 @@ class CoachStateResponse(BaseModel):
 class SessionReportsResponse(BaseModel):
     conversation_id: str
     session_reports: list[str]
+
+

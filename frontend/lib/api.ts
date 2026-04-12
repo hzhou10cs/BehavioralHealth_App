@@ -3,8 +3,27 @@ export type LoginRequest = {
   password: string;
 };
 
+export type HealthProfile = {
+  firstName: string;
+  lastName: string;
+  gender: string;
+  occupation: string;
+  phone: string;
+  email: string;
+  height: string;
+  initialWeight: string;
+  bodyMeasurements: string;
+  weightStatement: string;
+  allergy: string;
+  medication: string;
+  lifestyle: string;
+  medicalHistory: string;
+  registerDate: string;
+};
+
 export type RegisterRequest = LoginRequest & {
   name: string;
+  healthProfile?: HealthProfile;
 };
 
 export type LoginResponse = {
@@ -93,6 +112,24 @@ type BackendLessonSummary = {
   status: string;
 };
 
+
+type BackendHealthProfile = {
+  first_name: string;
+  last_name: string;
+  gender: string;
+  occupation: string;
+  phone: string;
+  email: string;
+  height: string;
+  initial_weight: string;
+  body_measurements: string;
+  weight_statement: string;
+  allergy: string;
+  medication: string;
+  lifestyle: string;
+  medical_history: string;
+  register_date: string;
+};
 type BackendLessonDetail = BackendLessonSummary & {
   objectives: string[];
   sections: LessonSection[];
@@ -144,6 +181,66 @@ function mapLessonSummary(lesson: BackendLessonSummary): LessonSummary {
   };
 }
 
+
+function mapHealthProfile(profile: BackendHealthProfile): HealthProfile {
+  return {
+    firstName: profile.first_name ?? "",
+    lastName: profile.last_name ?? "",
+    gender: profile.gender ?? "",
+    occupation: profile.occupation ?? "",
+    phone: profile.phone ?? "",
+    email: profile.email ?? "",
+    height: profile.height ?? "",
+    initialWeight: profile.initial_weight ?? "",
+    bodyMeasurements: profile.body_measurements ?? "",
+    weightStatement: profile.weight_statement ?? "",
+    allergy: profile.allergy ?? "N/A",
+    medication: profile.medication ?? "N/A",
+    lifestyle: profile.lifestyle ?? "N/A",
+    medicalHistory: profile.medical_history ?? "N/A",
+    registerDate: profile.register_date ?? ""
+  };
+}
+
+function toBackendHealthProfile(profile: HealthProfile): BackendHealthProfile {
+  return {
+    first_name: profile.firstName,
+    last_name: profile.lastName,
+    gender: profile.gender,
+    occupation: profile.occupation,
+    phone: profile.phone,
+    email: profile.email,
+    height: profile.height,
+    initial_weight: profile.initialWeight,
+    body_measurements: profile.bodyMeasurements,
+    weight_statement: profile.weightStatement,
+    allergy: profile.allergy,
+    medication: profile.medication,
+    lifestyle: profile.lifestyle,
+    medical_history: profile.medicalHistory,
+    register_date: profile.registerDate
+  };
+}
+
+function defaultHealthProfile(email = ""): HealthProfile {
+  return {
+    firstName: "",
+    lastName: "",
+    gender: "",
+    occupation: "",
+    phone: "",
+    email,
+    height: "",
+    initialWeight: "",
+    bodyMeasurements: "",
+    weightStatement: "",
+    allergy: "N/A",
+    medication: "N/A",
+    lifestyle: "N/A",
+    medicalHistory: "N/A",
+    registerDate: ""
+  };
+}
 function mapLessonDetail(lesson: BackendLessonDetail): LessonDetail {
   return {
     ...mapLessonSummary(lesson),
@@ -253,13 +350,19 @@ export async function login({ email, password }: LoginRequest): Promise<LoginRes
 export async function register({
   email,
   password,
-  name
+  name,
+  healthProfile
 }: RegisterRequest): Promise<LoginResponse> {
   activeConversationId = null;
 
   const response = await request<BackendLoginResponse>("/auth/register", {
     method: "POST",
-    body: JSON.stringify({ email, password, name })
+    body: JSON.stringify({
+      email,
+      password,
+      name,
+      health_profile: toBackendHealthProfile(healthProfile ?? defaultHealthProfile(email))
+    })
   });
 
   accessToken = response.access_token;
@@ -324,3 +427,19 @@ export async function fetchLesson(lessonId: string): Promise<LessonDetail> {
   const lesson = await request<BackendLessonDetail>(`/lessons/${lessonId}`);
   return mapLessonDetail(lesson);
 }
+
+export async function fetchHealthProfile(): Promise<HealthProfile> {
+  ensureAuthenticated();
+  const response = await request<{ profile: BackendHealthProfile }>("/auth/profile");
+  return mapHealthProfile(response.profile);
+}
+
+export async function updateHealthProfile(profile: HealthProfile): Promise<HealthProfile> {
+  ensureAuthenticated();
+  const response = await request<{ profile: BackendHealthProfile }>("/auth/profile", {
+    method: "PUT",
+    body: JSON.stringify(toBackendHealthProfile(profile))
+  });
+  return mapHealthProfile(response.profile);
+}
+
