@@ -29,6 +29,7 @@ export type RegisterRequest = LoginRequest & {
 export type LoginResponse = {
   accessToken: string;
   userName: string;
+  tutorialRequired: boolean;
 };
 
 export type ChatMessage = {
@@ -85,6 +86,7 @@ type BackendLoginResponse = {
   access_token: string;
   token_type: string;
   user_name: string;
+  tutorial_required?: boolean;
 };
 
 type BackendConversation = {
@@ -343,7 +345,8 @@ export async function login({ email, password }: LoginRequest): Promise<LoginRes
 
   return {
     accessToken: response.access_token,
-    userName: response.user_name
+    userName: response.user_name,
+    tutorialRequired: response.tutorial_required ?? false
   };
 }
 
@@ -370,8 +373,16 @@ export async function register({
 
   return {
     accessToken: response.access_token,
-    userName: response.user_name
+    userName: response.user_name,
+    tutorialRequired: response.tutorial_required ?? false
   };
+}
+
+export async function completeTutorial(): Promise<void> {
+  ensureAuthenticated();
+  await request<{ tutorial_required: boolean }>("/auth/tutorial/complete", {
+    method: "POST"
+  });
 }
 
 export async function fetchMessages(): Promise<ChatMessage[]> {

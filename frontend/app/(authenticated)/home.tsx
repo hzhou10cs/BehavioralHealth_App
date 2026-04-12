@@ -7,7 +7,7 @@ import ScreenHeader from "../../components/ScreenHeader";
 import { useSession } from "../../lib/session";
 
 export default function HomeRoute() {
-  const { signOut, userName } = useSession();
+  const { beginTutorial, signOut, userName } = useSession();
 
   return (
     <AppShell title="Behavioral Health Home">
@@ -16,6 +16,7 @@ export default function HomeRoute() {
           title={`Hello, ${userName}`}
           description="Choose where you want to go next. Each area opens in its own screen."
           actionLabel="Log Out"
+          actionTutorialId="home-log-out"
           onAction={() => {
             signOut();
             router.replace("/");
@@ -28,23 +29,44 @@ export default function HomeRoute() {
           </Text>
           <Button
             accessibilityLabel="Open Lessons"
+            tutorialId="home-open-lessons"
             onPress={() => router.push("../lessons")}
           >
             Open Lessons
           </Button>
-          <Button accessibilityLabel="Open Chat" onPress={() => router.push("/chat")}>
+          <Button
+            accessibilityLabel="Open Chat"
+            tutorialId="home-open-chat"
+            onPress={() => router.push("/chat")}
+          >
             Open Chat
           </Button>
-          <Button accessibilityLabel="Open History" onPress={() => router.push("/history")}>
+          <Button
+            accessibilityLabel="Open History"
+            tutorialId="home-open-history"
+            onPress={() => router.push("/history")}
+          >
             Open History
           </Button>
           <Button
             accessibilityLabel="Open Health Profile"
+            tutorialId="home-open-profile"
             onPress={() => router.push("../profile")}
           >
             Open Health Profile
           </Button>
         </Card>
+
+        {__DEV__ ? (
+          <Card title="Developer Testing">
+            <Text style={styles.copy}>
+              Replay the first-time tutorial for this signed-in session without creating another account.
+            </Text>
+            <Button accessibilityLabel="Replay tutorial" onPress={beginTutorial}>
+              Replay Tutorial
+            </Button>
+          </Card>
+        ) : null}
       </View>
     </AppShell>
   );

@@ -4,6 +4,7 @@ const {
   fetchHealthProfile,
   fetchChatHistory,
   fetchMessages,
+  completeTutorial,
   login,
   register,
   resetClientStateForTests,
@@ -33,7 +34,8 @@ describe("frontend api client", () => {
         json: {
           access_token: "development-token",
           token_type: "bearer",
-          user_name: "alex"
+          user_name: "alex",
+          tutorial_required: true
         }
       })
     );
@@ -55,7 +57,8 @@ describe("frontend api client", () => {
     );
     expect(result).toEqual({
       accessToken: "development-token",
-      userName: "alex"
+      userName: "alex",
+      tutorialRequired: true
     });
   });
 
@@ -67,7 +70,8 @@ describe("frontend api client", () => {
         json: {
           access_token: "development-token",
           token_type: "bearer",
-          user_name: "alex"
+          user_name: "alex",
+          tutorial_required: true
         }
       })
     );
@@ -108,8 +112,32 @@ describe("frontend api client", () => {
     );
     expect(result).toEqual({
       accessToken: "development-token",
-      userName: "alex"
+      userName: "alex",
+      tutorialRequired: true
     });
+  });
+
+  it("marks the first-time tutorial as completed", async () => {
+    const fetchMock = global.fetch;
+    await loginWith(fetchMock);
+
+    fetchMock.mockResolvedValueOnce(
+      createResponse({
+        json: {
+          tutorial_required: false
+        }
+      })
+    );
+
+    await completeTutorial();
+
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "http://127.0.0.1:8000/auth/tutorial/complete",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.any(Headers)
+      })
+    );
   });
 
   it("loads the saved health profile from the backend", async () => {
@@ -550,7 +578,8 @@ async function loginWith(fetchMock) {
       json: {
         access_token: "alex-token",
         token_type: "bearer",
-        user_name: "alex"
+        user_name: "alex",
+        tutorial_required: false
       }
     })
   );

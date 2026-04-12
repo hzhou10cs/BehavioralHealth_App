@@ -1,5 +1,5 @@
 import { router } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import AppShell from "../../components/AppShell";
 import Button from "../../components/Button";
@@ -7,14 +7,18 @@ import Card from "../../components/Card";
 import Input from "../../components/Input";
 import MessageBubble from "../../components/MessageBubble";
 import ScreenHeader from "../../components/ScreenHeader";
-import { fetchMessages, sendMessage, type ChatMessage } from "../../lib/api";
+import { useTutorialLayout } from "../../components/TutorialLayoutContext";
 import { useSession } from "../../lib/session";
+import { TUTORIAL_OVERLAY_SPACE, TUTORIAL_REVEAL_TARGETS } from "../../lib/tutorial";
+import { fetchMessages, sendMessage, type ChatMessage } from "../../lib/api";
 
 export default function ChatRoute() {
-  const { userName } = useSession();
+  const { userName, tutorialRequired, activeTutorialTargetId } = useSession();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [status, setStatus] = useState("Loading messages...");
+  const scrollRef = useRef<ScrollView | null>(null);
+  const { requestMeasure } = useTutorialLayout();
 
   useEffect(() => {
     let mounted = true;
@@ -35,6 +39,17 @@ export default function ChatRoute() {
     };
   }, []);
 
+  function revealTutorialTarget() {
+    if (activeTutorialTargetId && TUTORIAL_REVEAL_TARGETS.has(activeTutorialTargetId)) {
+      scrollRef.current?.scrollToEnd({ animated: true });
+      setTimeout(() => requestMeasure(activeTutorialTargetId), 250);
+    }
+  }
+
+  useEffect(() => {
+    revealTutorialTarget();
+  }, [activeTutorialTargetId]);
+
   async function onSend() {
     if (!draft.trim()) {
       return;
@@ -53,11 +68,20 @@ export default function ChatRoute() {
 
   return (
     <AppShell title="Therapy Chat" keyboardAware>
-      <View style={styles.screen}>
+      <ScrollView
+        ref={scrollRef}
+        contentContainerStyle={[
+          styles.screen,
+          tutorialRequired && styles.tutorialScreen
+        ]}
+        keyboardShouldPersistTaps="handled"
+        onContentSizeChange={revealTutorialTarget}
+      >
         <ScreenHeader
           title="Therapy Chat"
           description={`Continue the active conversation for ${userName}.`}
           onBack={() => router.back()}
+          backTutorialId="shared-back"
         />
 
         <Card title={`Active Chat (${userName})`}>
@@ -69,23 +93,27 @@ export default function ChatRoute() {
           </ScrollView>
           <Input
             label="Message"
+            tutorialId="chat-message-input"
             value={draft}
             onChangeText={setDraft}
             placeholder="Type a message"
           />
-          <Button accessibilityLabel="Send" onPress={onSend}>
+          <Button accessibilityLabel="Send" tutorialId="chat-send" onPress={onSend}>
             Send
           </Button>
         </Card>
-      </View>
+      </ScrollView>
     </AppShell>
   );
 }
 
 const styles = StyleSheet.create({
   screen: {
-    flex: 1,
-    gap: 14
+    gap: 14,
+    paddingBottom: 24
+  },
+  tutorialScreen: {
+    paddingBottom: TUTORIAL_OVERLAY_SPACE + 24
   },
   statusText: {
     color: "#334155"

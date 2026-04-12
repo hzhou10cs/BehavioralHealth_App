@@ -39,6 +39,7 @@ def test_auth_login_success(client):
     assert body["token_type"] == "bearer"
     assert body["user_name"] == "Alex Parker"
     assert body["access_token"] == register["access_token"]
+    assert body["tutorial_required"] is True
 
 
 def test_auth_register_duplicate_email_returns_conflict(client):
@@ -146,6 +147,23 @@ def test_auth_profile_update_round_trips_saved_health_info(client):
     fetched = client.get("/auth/profile", headers=headers)
     assert fetched.status_code == 200
     assert fetched.json()["profile"] == updated_profile
+
+
+def test_tutorial_completion_turns_off_first_time_flag(client):
+    auth = register_user(client, "alex@example.com")
+    headers = auth_headers(auth["access_token"])
+    assert auth["tutorial_required"] is True
+
+    completed = client.post("/auth/tutorial/complete", headers=headers)
+    assert completed.status_code == 200
+    assert completed.json()["tutorial_required"] is False
+
+    login = client.post(
+        "/auth/login",
+        json={"email": "alex@example.com", "password": "password123"},
+    )
+    assert login.status_code == 200
+    assert login.json()["tutorial_required"] is False
 
 
 def test_conversation_routes_require_bearer_auth(client):

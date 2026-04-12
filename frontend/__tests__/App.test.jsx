@@ -33,6 +33,7 @@ describe("App integration", () => {
     global.fetch = jest.fn();
     resetClientStateForTests();
     jest.spyOn(console, "warn").mockImplementation(() => {});
+    jest.spyOn(console, "error").mockImplementation(() => {});
   });
 
   it("logs in, sends a message through the backend flow, and updates chat and history UI", async () => {
@@ -43,7 +44,8 @@ describe("App integration", () => {
           json: {
             access_token: "development-token",
             token_type: "bearer",
-            user_name: "alex"
+            user_name: "alex",
+            tutorial_required: false
           }
         })
       )

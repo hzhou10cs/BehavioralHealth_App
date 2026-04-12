@@ -27,6 +27,7 @@ from app.schemas import (
     MessageCreate,
     RegisterRequest,
     SessionReportsResponse,
+    TutorialStatusResponse,
 )
 from app.services.chatbox.state_tracker import apply_delta_text, state_to_text
 from app.store import build_store
@@ -105,6 +106,7 @@ def login(
             secret_key=settings.auth_secret_key,
         ),
         user_name=str(account["name"]),
+        tutorial_required=not bool(account.get("tutorial_completed")),
     )
 
 
@@ -152,8 +154,17 @@ def register(
             secret_key=settings.auth_secret_key,
         ),
         user_name=str(account["name"]),
+        tutorial_required=not bool(account.get("tutorial_completed")),
     )
 
+
+
+@router.post("/auth/tutorial/complete", response_model=TutorialStatusResponse)
+def complete_tutorial(
+    current_account: dict = Depends(get_current_account),
+) -> TutorialStatusResponse:
+    store.mark_tutorial_completed_for_auth_user(int(current_account["id"]))
+    return TutorialStatusResponse(tutorial_required=False)
 
 
 @router.get("/auth/profile", response_model=HealthProfileResponse)

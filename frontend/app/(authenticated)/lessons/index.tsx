@@ -5,9 +5,12 @@ import AppShell from "../../../components/AppShell";
 import Button from "../../../components/Button";
 import Card from "../../../components/Card";
 import ScreenHeader from "../../../components/ScreenHeader";
+import { useSession } from "../../../lib/session";
+import { TUTORIAL_OVERLAY_SPACE } from "../../../lib/tutorial";
 import { fetchLessons, type LessonSummary } from "../../../lib/api";
 
 export default function LessonsRoute() {
+  const { tutorialRequired } = useSession();
   const [lessons, setLessons] = useState<LessonSummary[]>([]);
   const [status, setStatus] = useState("Loading lessons...");
 
@@ -37,12 +40,18 @@ export default function LessonsRoute() {
           title="SMART Lessons"
           description="Follow the weekly lesson plan, review previous topics, and prepare topics for your next coaching chat."
           onBack={() => router.back()}
+          backTutorialId="shared-back"
         />
 
         {status ? <Text style={styles.statusText}>{status}</Text> : null}
 
-        <ScrollView contentContainerStyle={styles.list}>
-          {lessons.map((lesson) => (
+        <ScrollView
+          contentContainerStyle={[
+            styles.list,
+            tutorialRequired && styles.tutorialList
+          ]}
+        >
+          {lessons.map((lesson, index) => (
             <Card key={lesson.id} title={`Week ${lesson.week}: ${lesson.title}`}>
               <View style={styles.metaRow}>
                 <Text style={styles.phaseText}>{formatPhase(lesson.phase)}</Text>
@@ -51,6 +60,7 @@ export default function LessonsRoute() {
               <Text style={styles.summaryText}>{lesson.summary}</Text>
               <Button
                 accessibilityLabel={`Open ${lesson.title}`}
+                tutorialId={index === 0 ? "lessons-view-first" : undefined}
                 onPress={() => router.push(`/lessons/${lesson.id}` as never)}
               >
                 View Lesson
@@ -82,6 +92,9 @@ const styles = StyleSheet.create({
   list: {
     gap: 14,
     paddingBottom: 20
+  },
+  tutorialList: {
+    paddingBottom: TUTORIAL_OVERLAY_SPACE + 20
   },
   metaRow: {
     flexDirection: "row",

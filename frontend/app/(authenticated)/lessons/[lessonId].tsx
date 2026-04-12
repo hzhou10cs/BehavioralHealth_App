@@ -4,9 +4,12 @@ import { ScrollView, StyleSheet, Text, View } from "react-native";
 import AppShell from "../../../components/AppShell";
 import Card from "../../../components/Card";
 import ScreenHeader from "../../../components/ScreenHeader";
+import { useSession } from "../../../lib/session";
+import { TUTORIAL_OVERLAY_SPACE } from "../../../lib/tutorial";
 import { fetchLesson, type LessonDetail } from "../../../lib/api";
 
 export default function LessonDetailRoute() {
+  const { tutorialRequired } = useSession();
   const params = useLocalSearchParams<{ lessonId?: string }>();
   const lessonId = typeof params.lessonId === "string" ? params.lessonId : "";
   const [lesson, setLesson] = useState<LessonDetail | null>(null);
@@ -47,12 +50,18 @@ export default function LessonDetailRoute() {
               : "Open a lesson to view its summary, key ideas, and activity."
           }
           onBack={() => router.back()}
+          backTutorialId="lesson-detail-back"
         />
 
         {status ? <Text style={styles.statusText}>{status}</Text> : null}
 
         {lesson ? (
-          <ScrollView contentContainerStyle={styles.content}>
+          <ScrollView
+            contentContainerStyle={[
+              styles.content,
+              tutorialRequired && styles.tutorialContent
+            ]}
+          >
             <Card title="Overview">
               <Text style={styles.summaryText}>{lesson.summary}</Text>
               <Text style={styles.metaText}>
@@ -111,6 +120,9 @@ const styles = StyleSheet.create({
   content: {
     gap: 14,
     paddingBottom: 20
+  },
+  tutorialContent: {
+    paddingBottom: TUTORIAL_OVERLAY_SPACE + 20
   },
   summaryText: {
     color: "#334155",

@@ -1,23 +1,31 @@
 import type { PropsWithChildren } from "react";
 import { Pressable, StyleSheet, Text } from "react-native";
+import { useTutorialTarget } from "./TutorialTarget";
 
 type ButtonProps = PropsWithChildren<{
   onPress?: () => void;
   disabled?: boolean;
   accessibilityLabel?: string;
+  tutorialId?: string;
 }>;
 
 export default function Button({
   children,
   onPress,
   disabled = false,
-  accessibilityLabel
+  accessibilityLabel,
+  tutorialId
 }: ButtonProps) {
+  const tutorialTarget = useTutorialTarget(tutorialId);
+
   return (
     <Pressable
+      ref={tutorialTarget.ref}
+      collapsable={tutorialTarget.collapsable}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       disabled={disabled}
+      onLayout={tutorialTarget.onLayout}
       onPress={onPress}
       style={({ pressed }) => [
         styles.button,

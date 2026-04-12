@@ -34,6 +34,7 @@ class SQLiteHealthChatStore:
                 email TEXT NOT NULL UNIQUE,
                 name TEXT NOT NULL DEFAULT '',
                 user_id INTEGER,
+                tutorial_completed INTEGER NOT NULL DEFAULT 0,
                 health_profile_json TEXT NOT NULL DEFAULT '{}',
                 password_salt TEXT NOT NULL,
                 password_hash TEXT NOT NULL,
@@ -133,6 +134,10 @@ class SQLiteHealthChatStore:
             self.conn.execute("ALTER TABLE auth_users ADD COLUMN name TEXT NOT NULL DEFAULT ''")
         if "user_id" not in auth_user_columns:
             self.conn.execute("ALTER TABLE auth_users ADD COLUMN user_id INTEGER")
+        if "tutorial_completed" not in auth_user_columns:
+            self.conn.execute(
+                "ALTER TABLE auth_users ADD COLUMN tutorial_completed INTEGER NOT NULL DEFAULT 0"
+            )
         if "health_profile_json" not in auth_user_columns:
             self.conn.execute("ALTER TABLE auth_users ADD COLUMN health_profile_json TEXT NOT NULL DEFAULT '{}'")
         self.conn.execute(
@@ -290,7 +295,7 @@ class SQLiteHealthChatStore:
     def get_auth_user_by_email(self, email: str) -> dict[str, Any] | None:
         row = self.conn.execute(
             """
-            SELECT id, email, name, user_id, password_salt, password_hash, health_profile_json, created_at
+            SELECT id, email, name, user_id, tutorial_completed, password_salt, password_hash, health_profile_json, created_at
             FROM auth_users
             WHERE email = ?
             """,
@@ -301,13 +306,24 @@ class SQLiteHealthChatStore:
     def get_auth_user_by_id(self, auth_user_id: int) -> dict[str, Any] | None:
         row = self.conn.execute(
             """
-            SELECT id, email, name, user_id, password_salt, password_hash, health_profile_json, created_at
+            SELECT id, email, name, user_id, tutorial_completed, password_salt, password_hash, health_profile_json, created_at
             FROM auth_users
             WHERE id = ?
             """,
             (auth_user_id,),
         ).fetchone()
         return dict(row) if row is not None else None
+
+    def mark_tutorial_completed_for_auth_user(self, auth_user_id: int) -> None:
+        self.conn.execute(
+            """
+            UPDATE auth_users
+            SET tutorial_completed = 1
+            WHERE id = ?
+            """,
+            (auth_user_id,),
+        )
+        self.conn.commit()
     def get_health_profile_for_auth_user(self, auth_user_id: int) -> dict[str, Any]:
         row = self.conn.execute(
             """

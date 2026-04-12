@@ -10,6 +10,7 @@ BehavioralHealth App is a full-stack project with:
 Current capabilities include:
 - registering and logging in
 - capturing and editing a health intake profile during and after registration
+- guiding first-time users through a live in-app tutorial across the main screens
 - creating and listing conversations
 - sending messages
 - generating an assistant reply from the backend
@@ -64,6 +65,8 @@ npm.cmd install
 cd ..
 ```
 
+This `frontend` install step picks up all current Expo/mobile dependencies, including the tutorial spotlight package `react-native-svg`.
+
 Optional env files:
 
 ```powershell
@@ -84,6 +87,8 @@ cd frontend
 npm install
 cd ..
 ```
+
+This `frontend` install step picks up all current Expo/mobile dependencies, including the tutorial spotlight package `react-native-svg`.
 
 Optional env files:
 
@@ -173,6 +178,7 @@ What to expect:
 - the backend starts on `http://127.0.0.1:8000`
 - Expo starts in a second process for the frontend
 - the app opens to the login screen, then routes to Home, Chat, and History after authentication
+- first-time users are guided through a live tutorial on the actual app screens after sign-in or registration
 
 The detailed sections below follow this same order: phone workflow first, integrated Docker second, and fully local development third.
 
@@ -406,6 +412,8 @@ cd frontend
 npm.cmd install
 ```
 
+If you pull new frontend changes later, run `npm.cmd install` in `frontend` again so any newly added Expo/native packages are installed before starting the app.
+
 Optional frontend env file:
 
 Windows PowerShell:
@@ -425,6 +433,11 @@ Root tooling behavior:
 - `npm run check:phone`, `npm run frontend:phone`, and `npm run app:phone` sync `frontend/.env` to your current LAN IP for the full local phone workflow
 - `npm run check:frontend:phone` is the frontend-only preflight for the Docker-backend phone workflow
 - `npm run check:phone` and `npm run check:frontend:phone` print the selected interface and warn, but do not fail, if the detected phone API URL looks suspicious
+
+Tutorial behavior:
+- new accounts receive a first-time guided tutorial that walks through the real app screens
+- the tutorial completion state is stored per account, so returning users are not shown it again
+- in development builds, the Home screen includes a `Replay Tutorial` button for retesting the walkthrough
 
 The frontend uses Expo Router:
 - runtime entry point: `expo-router/entry`
@@ -505,8 +518,8 @@ cd backend
 python -m pytest -q
 ```
 
-Current expected result:
-- `33 passed`
+Expected result:
+- all backend tests pass
 
 To run only the standalone SQLite persistence unit tests:
 
@@ -530,6 +543,8 @@ These tests verify that:
 - backend responses are mapped into frontend data correctly
 - registration and health-profile API flows map correctly
 - the routed app UI updates after login, sending a message, and opening history
+- tutorial replay, skip-confirmation flow, and step progression work
+- tutorial spotlight geometry and popup placement logic stay within expected bounds
 
 ### Frontend Type Check
 
@@ -612,6 +627,8 @@ Key files:
 
 - The frontend communicates with the backend through `frontend/lib/api.ts`.
 - Authentication routes are `POST /auth/register` and `POST /auth/login`.
+- Authentication responses include a first-time tutorial flag for the frontend walkthrough.
+- The tutorial completion route is `POST /auth/tutorial/complete`.
 - The backend assistant reply route is `POST /conversations/{conversation_id}/assistant-reply`.
 - Backend routes are defined in `backend/app/main.py`.
 - Conversation and message data are persisted in SQLite instead of the old in-memory store.

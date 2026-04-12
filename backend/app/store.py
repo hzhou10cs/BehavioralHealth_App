@@ -91,6 +91,9 @@ class SQLiteAppStore:
     def get_auth_user_by_id(self, auth_user_id: int) -> dict | None:
         return self._db.get_auth_user_by_id(auth_user_id)
 
+    def mark_tutorial_completed_for_auth_user(self, auth_user_id: int) -> None:
+        self._db.mark_tutorial_completed_for_auth_user(auth_user_id)
+
     def create_auth_user(
         self,
         email: str,
