@@ -1,21 +1,28 @@
 import { router } from "expo-router";
+import { useIsFocused } from "@react-navigation/native";
 import { useEffect, useState } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
-import AppShell from "../../components/AppShell";
-import Card from "../../components/Card";
-import ChatHistoryList from "../../components/ChatHistoryList";
-import ScreenHeader from "../../components/ScreenHeader";
-import { useSession } from "../../lib/session";
-import { TUTORIAL_OVERLAY_SPACE } from "../../lib/tutorial";
-import { fetchChatHistory, type ChatSession } from "../../lib/api";
+import { ScrollView, StyleSheet, Text } from "react-native";
+import AppShell from "../../../components/AppShell";
+import Card from "../../../components/Card";
+import ChatHistoryList from "../../../components/ChatHistoryList";
+import ScreenHeader from "../../../components/ScreenHeader";
+import { useSession } from "../../../lib/session";
+import { TUTORIAL_OVERLAY_SPACE } from "../../../lib/tutorial";
+import { fetchChatHistory, type ChatSession } from "../../../lib/api";
 
 export default function HistoryRoute() {
   const { tutorialRequired } = useSession();
+  const isFocused = useIsFocused();
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [status, setStatus] = useState("Loading history...");
 
   useEffect(() => {
+    if (!isFocused) {
+      return;
+    }
+
     let mounted = true;
+    setStatus("Loading history...");
 
     fetchChatHistory()
       .then((items) => {
@@ -31,7 +38,7 @@ export default function HistoryRoute() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [isFocused]);
 
   return (
     <AppShell title="Chat History">

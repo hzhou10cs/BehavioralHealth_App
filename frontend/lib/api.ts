@@ -427,6 +427,14 @@ export async function fetchChatHistory(): Promise<ChatSession[]> {
   return conversations.map(mapConversation);
 }
 
+export async function fetchConversationHistory(conversationId: string): Promise<ChatMessage[]> {
+  ensureAuthenticated();
+  const messages = await request<BackendMessage[]>(
+    `/conversations/${conversationId}/history`
+  );
+  return messages.map(mapMessage);
+}
+
 export async function fetchLessons(): Promise<LessonSummary[]> {
   ensureAuthenticated();
   const lessons = await request<BackendLessonSummary[]>("/lessons");

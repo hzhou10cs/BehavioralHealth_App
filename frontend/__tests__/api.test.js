@@ -1,5 +1,6 @@
 const {
   completeLesson,
+  fetchConversationHistory,
   fetchLesson,
   fetchLessons,
   fetchHealthProfile,
@@ -430,6 +431,55 @@ describe("frontend api client", () => {
         id: "conv-1",
         title: "Test Session",
         updatedAt: "2026-03-24T18:05:00.000Z"
+      }
+    ]);
+  });
+
+  it("loads a saved conversation transcript by conversation id", async () => {
+    const fetchMock = global.fetch;
+    await loginWith(fetchMock);
+
+    fetchMock.mockResolvedValueOnce(
+      createResponse({
+        json: [
+          {
+            id: "msg-1",
+            conversation_id: "conv-1",
+            role: "user",
+            content: "I feel stressed.",
+            created_at: "2026-03-24T18:01:00.000Z"
+          },
+          {
+            id: "msg-2",
+            conversation_id: "conv-1",
+            role: "assistant",
+            content: "Tell me more about what happened.",
+            created_at: "2026-03-24T18:02:00.000Z"
+          }
+        ]
+      })
+    );
+
+    const result = await fetchConversationHistory("conv-1");
+
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "http://127.0.0.1:8000/conversations/conv-1/history",
+      expect.objectContaining({
+        headers: expect.any(Headers)
+      })
+    );
+    expect(result).toEqual([
+      {
+        id: "msg-1",
+        role: "user",
+        text: "I feel stressed.",
+        createdAt: "2026-03-24T18:01:00.000Z"
+      },
+      {
+        id: "msg-2",
+        role: "assistant",
+        text: "Tell me more about what happened.",
+        createdAt: "2026-03-24T18:02:00.000Z"
       }
     ]);
   });

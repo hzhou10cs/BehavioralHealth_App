@@ -1,5 +1,6 @@
 import { StyleSheet, Text, View } from "react-native";
 import type { ChatMessage } from "../lib/api";
+import { formatMessageTimestamp } from "../lib/formatMessageTimestamp";
 
 type MessageBubbleProps = {
   message: ChatMessage;
@@ -7,12 +8,14 @@ type MessageBubbleProps = {
 
 export default function MessageBubble({ message }: MessageBubbleProps) {
   const isUser = message.role === "user";
+  const timestamp = formatMessageTimestamp(message.createdAt);
 
   return (
     <View style={[styles.row, isUser ? styles.userRow : styles.assistantRow]}>
       <View style={[styles.bubble, isUser ? styles.userBubble : styles.assistantBubble]}>
         <Text style={styles.role}>{message.role}:</Text>
         <Text style={styles.text}>{message.text}</Text>
+        {timestamp ? <Text style={styles.timestamp}>{timestamp}</Text> : null}
       </View>
     </View>
   );
@@ -49,5 +52,9 @@ const styles = StyleSheet.create({
   },
   text: {
     color: "#0f172a"
+  },
+  timestamp: {
+    fontSize: 12,
+    color: "#64748b"
   }
 });

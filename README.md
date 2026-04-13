@@ -15,7 +15,7 @@ Current capabilities include:
 - creating and listing conversations
 - sending messages
 - generating an assistant reply from the backend
-- viewing chat history
+- viewing saved chat history in a read-only conversation screen with per-message timestamps
 - navigating between dedicated app screens with Expo Router
 - tracking coach state from conversation updates
 - generating session report memory for later assistant replies
@@ -545,7 +545,8 @@ These tests verify that:
 - backend responses are mapped into frontend data correctly
 - registration and health-profile API flows map correctly
 - lesson progression, lesson completion, and locked-lesson behavior map correctly
-- the routed app UI updates after login, sending a message, and opening history
+- the routed app UI updates after login, sending a message, opening history, and viewing a saved read-only transcript
+- message timestamps render on the live chat screen and the saved history transcript
 - tutorial replay, skip-confirmation flow, and step progression work
 - tutorial spotlight geometry and popup placement logic stay within expected bounds
 
@@ -635,6 +636,8 @@ Key files:
 - Lesson routes are `GET /lessons`, `GET /lessons/{lesson_id}`, and `POST /lessons/{lesson_id}/complete`.
 - Lessons are unlocked sequentially per user; locked lesson detail and completion attempts are rejected by the backend.
 - The backend assistant reply route is `POST /conversations/{conversation_id}/assistant-reply`.
+- `GET /conversations` powers the saved session list, and `GET /conversations/{conversation_id}/history` powers the read-only conversation transcript view.
+- Message payloads include `created_at`, which the frontend shows as a small timestamp under each message in chat and history views.
 - Backend routes are defined in `backend/app/main.py`.
 - Conversation and message data are persisted in SQLite instead of the old in-memory store.
 - The assistant reply route uses a migrated chat-agent service under `backend/app/services/chatbox/`.
