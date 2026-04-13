@@ -248,6 +248,12 @@ const styles = StyleSheet.create({
   statusText: {
     color: "#334155"
   },
+  infoText: {
+    color: "#475569",
+    marginTop: 12,
+    marginBottom: 8,
+    lineHeight: 20
+  },
   hint: {
     color: "#475569",
     marginBottom: 4

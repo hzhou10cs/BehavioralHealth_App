@@ -1,6 +1,6 @@
 import json
 import sqlite3
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -53,6 +53,45 @@ def _auth_error() -> HTTPException:
     )
 
 
+def _from_isoformat(value: str) -> datetime:
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError:
+        return datetime.fromtimestamp(0, tz=timezone.utc)
+
+
+def _is_account_locked(locked_until: str | None) -> bool:
+    if not locked_until:
+        return False
+    expiry = _from_isoformat(locked_until)
+    return expiry > datetime.now(timezone.utc)
+
+
+def _locked_seconds_remaining(locked_until: str | None) -> int:
+    if not locked_until:
+        return 0
+    expiry = _from_isoformat(locked_until)
+    remaining = (expiry - datetime.now(timezone.utc)).total_seconds()
+    return int(remaining) if remaining > 0 else 0
+
+
+def _auth_locked_error(remaining_seconds: int | None = None) -> HTTPException:
+    if remaining_seconds is None or remaining_seconds <= 0:
+        detail = "Too many failed login attempts. Try again after 5 minutes."
+    else:
+        minutes = remaining_seconds // 60
+        seconds = remaining_seconds % 60
+        if minutes >= 1:
+            detail = f"Too many failed login attempts. Try again in {minutes} minute(s)."
+        else:
+            detail = f"Too many failed login attempts. Try again in {seconds} second(s)."
+
+    return HTTPException(
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        detail=detail,
+    )
+
+
 def get_current_account(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
     settings: Settings = Depends(get_settings),
@@ -88,21 +127,46 @@ def login(
 ) -> LoginResponse:
     email = str(payload.email).lower()
     account = store.get_auth_user_by_email(email)
-    if account is None or not verify_password(
-        payload.password,
-        account["password_salt"],
-        account["password_hash"],
-    ):
+    if account is not None and _is_account_locked(account.get("locked_until")):
+        remaining_seconds = _locked_seconds_remaining(account.get("locked_until"))
+        raise _auth_locked_error(remaining_seconds)
+
+    dummy_salt, dummy_hash = hash_password("invalid-password")
+    password_ok = False
+    if account is not None:
+        password_ok = verify_password(
+            payload.password,
+            account["password_salt"],
+            account["password_hash"],
+        )
+    else:
+        verify_password(payload.password, dummy_salt, dummy_hash)
+
+    if account is None or not password_ok:
+        if account is not None:
+            current_attempts = int(account.get("failed_login_attempts", 0)) + 1
+            lockout_until = None
+            if current_attempts >= settings.auth_max_failed_login_attempts:
+                lockout_until = (
+                    datetime.now(timezone.utc)
+                    + timedelta(seconds=settings.auth_lockout_duration_seconds)
+                ).isoformat()
+            store.increment_failed_login_attempts(
+                int(account["id"]), lockout_until=lockout_until
+            )
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials"
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Wrong password or email",
         )
 
+    store.reset_failed_login_attempts(int(account["id"]))
     return LoginResponse(
         access_token=create_access_token(
             auth_user_id=int(account["id"]),
             user_id=int(account["user_id"]),
             email=email,
             secret_key=settings.auth_secret_key,
+            expires_in=settings.auth_token_expiration_seconds,
         ),
         user_name=str(account["name"]),
     )

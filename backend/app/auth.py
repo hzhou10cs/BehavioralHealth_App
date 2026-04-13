@@ -3,6 +3,7 @@ import hashlib
 import hmac
 import json
 import secrets
+import time
 
 
 def hash_password(password: str, salt: str | None = None) -> tuple[str, str]:
@@ -45,12 +46,16 @@ def create_access_token(
     user_id: int,
     email: str,
     secret_key: str,
+    expires_in: int = 3600,
 ) -> str:
+    now = int(time.time())
     payload = json.dumps(
         {
             "auth_user_id": auth_user_id,
             "user_id": user_id,
             "email": email.lower(),
+            "iat": now,
+            "exp": now + expires_in,
         },
         separators=(",", ":"),
         sort_keys=True,
@@ -80,12 +85,22 @@ def verify_access_token(token: str, *, secret_key: str) -> dict[str, int | str]:
     auth_user_id = parsed.get("auth_user_id")
     user_id = parsed.get("user_id")
     email = parsed.get("email")
+    issued_at = parsed.get("iat")
+    expires_at = parsed.get("exp")
+
     if not isinstance(auth_user_id, int):
         raise ValueError("Invalid auth user id")
     if not isinstance(user_id, int):
         raise ValueError("Invalid user id")
     if not isinstance(email, str) or not email:
         raise ValueError("Invalid email")
+    if not isinstance(issued_at, int):
+        raise ValueError("Invalid token issue time")
+    if not isinstance(expires_at, int):
+        raise ValueError("Invalid token expiry")
+
+    if time.time() >= expires_at:
+        raise ValueError("Expired token")
 
     return {
         "auth_user_id": auth_user_id,

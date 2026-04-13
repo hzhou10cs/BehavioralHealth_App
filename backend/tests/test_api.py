@@ -68,7 +68,57 @@ def test_auth_login_invalid_credentials(client):
         json={"email": "alex@example.com", "password": "wrong-password"},
     )
     assert response.status_code == 401
-    assert response.json()["detail"] == "Invalid credentials"
+    assert response.json()["detail"] == "Wrong password or email"
+
+
+def test_auth_login_lockout_after_max_failed_attempts(client):
+    register = client.post(
+        "/auth/register",
+        json={"name": "Alex", "email": "alex@example.com", "password": "password123"},
+    )
+    assert register.status_code == 201
+
+    for _ in range(5):
+        response = client.post(
+            "/auth/login",
+            json={"email": "alex@example.com", "password": "wrong-password"},
+        )
+        assert response.status_code == 401
+
+    locked_response = client.post(
+        "/auth/login",
+        json={"email": "alex@example.com", "password": "wrong-password"},
+    )
+    assert locked_response.status_code == 429
+    assert "Too many failed login attempts" in locked_response.json()["detail"]
+
+
+def test_auth_login_success_resets_failed_attempts(client):
+    register = client.post(
+        "/auth/register",
+        json={"name": "Alex", "email": "alex@example.com", "password": "password123"},
+    )
+    assert register.status_code == 201
+
+    for _ in range(2):
+        response = client.post(
+            "/auth/login",
+            json={"email": "alex@example.com", "password": "wrong-password"},
+        )
+        assert response.status_code == 401
+
+    success = client.post(
+        "/auth/login",
+        json={"email": "alex@example.com", "password": "password123"},
+    )
+    assert success.status_code == 200
+
+    # After a successful login, failed attempts should be reset and invalid password should not immediately lock.
+    response = client.post(
+        "/auth/login",
+        json={"email": "alex@example.com", "password": "wrong-password"},
+    )
+    assert response.status_code == 401
 
 
 def test_auth_register_stores_health_profile_and_exposes_it(client):
