@@ -11,6 +11,7 @@ Current capabilities include:
 - registering and logging in
 - capturing and editing a health intake profile during and after registration
 - guiding first-time users through a live in-app tutorial across the main screens
+- progressing through lessons in order, with later lessons locked until earlier ones are finished
 - creating and listing conversations
 - sending messages
 - generating an assistant reply from the backend
@@ -177,8 +178,9 @@ npm run app
 What to expect:
 - the backend starts on `http://127.0.0.1:8000`
 - Expo starts in a second process for the frontend
-- the app opens to the login screen, then routes to Home, Chat, and History after authentication
+- the app opens to the login screen, then routes to Home, Lessons, Chat, History, and Profile after authentication
 - first-time users are guided through a live tutorial on the actual app screens after sign-in or registration
+- lessons unlock in sequence, and each lesson page includes a `Finish Lesson` action to unlock the next one
 
 The detailed sections below follow this same order: phone workflow first, integrated Docker second, and fully local development third.
 
@@ -542,6 +544,7 @@ These tests verify that:
 - the frontend calls the backend API client correctly
 - backend responses are mapped into frontend data correctly
 - registration and health-profile API flows map correctly
+- lesson progression, lesson completion, and locked-lesson behavior map correctly
 - the routed app UI updates after login, sending a message, and opening history
 - tutorial replay, skip-confirmation flow, and step progression work
 - tutorial spotlight geometry and popup placement logic stay within expected bounds
@@ -629,6 +632,8 @@ Key files:
 - Authentication routes are `POST /auth/register` and `POST /auth/login`.
 - Authentication responses include a first-time tutorial flag for the frontend walkthrough.
 - The tutorial completion route is `POST /auth/tutorial/complete`.
+- Lesson routes are `GET /lessons`, `GET /lessons/{lesson_id}`, and `POST /lessons/{lesson_id}/complete`.
+- Lessons are unlocked sequentially per user; locked lesson detail and completion attempts are rejected by the backend.
 - The backend assistant reply route is `POST /conversations/{conversation_id}/assistant-reply`.
 - Backend routes are defined in `backend/app/main.py`.
 - Conversation and message data are persisted in SQLite instead of the old in-memory store.

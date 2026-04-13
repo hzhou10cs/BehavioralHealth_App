@@ -2,11 +2,12 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import AppShell from "../../../components/AppShell";
+import Button from "../../../components/Button";
 import Card from "../../../components/Card";
 import ScreenHeader from "../../../components/ScreenHeader";
 import { useSession } from "../../../lib/session";
 import { TUTORIAL_OVERLAY_SPACE } from "../../../lib/tutorial";
-import { fetchLesson, type LessonDetail } from "../../../lib/api";
+import { completeLesson, fetchLesson, type LessonDetail } from "../../../lib/api";
 
 export default function LessonDetailRoute() {
   const { tutorialRequired } = useSession();
@@ -14,6 +15,7 @@ export default function LessonDetailRoute() {
   const lessonId = typeof params.lessonId === "string" ? params.lessonId : "";
   const [lesson, setLesson] = useState<LessonDetail | null>(null);
   const [status, setStatus] = useState("Loading lesson...");
+  const [completing, setCompleting] = useState(false);
 
   useEffect(() => {
     if (!lessonId) {
@@ -38,6 +40,24 @@ export default function LessonDetailRoute() {
       mounted = false;
     };
   }, [lessonId]);
+
+  async function handleFinishLesson() {
+    if (!lesson || lesson.status === "completed") {
+      return;
+    }
+
+    try {
+      setCompleting(true);
+      setStatus("Finishing lesson...");
+      const completedLesson = await completeLesson(lesson.id);
+      setLesson(completedLesson);
+      setStatus("Lesson completed. Use Back to return to the lesson list.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Could not finish lesson");
+    } finally {
+      setCompleting(false);
+    }
+  }
 
   return (
     <AppShell title="Lesson Detail">
@@ -102,6 +122,27 @@ export default function LessonDetailRoute() {
                 ))}
               </Card>
             ) : null}
+
+            <Card title="Progress">
+              <Text style={styles.bodyText}>
+                {lesson.status === "completed"
+                  ? "You have already completed this lesson."
+                  : "Finish this lesson to unlock the next lesson in the plan."}
+              </Text>
+              <Button
+                accessibilityLabel={
+                  lesson.status === "completed" ? "Lesson Completed" : "Finish Lesson"
+                }
+                disabled={lesson.status === "completed" || completing}
+                onPress={handleFinishLesson}
+              >
+                {lesson.status === "completed"
+                  ? "Lesson Completed"
+                  : completing
+                    ? "Finishing..."
+                    : "Finish Lesson"}
+              </Button>
+            </Card>
           </ScrollView>
         ) : null}
       </View>

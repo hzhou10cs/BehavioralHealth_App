@@ -228,12 +228,18 @@ def test_lessons_are_seeded_and_available_per_user(client):
     assert lessons[0]["id"] == "lesson-01"
     assert lessons[0]["title"] == "Welcome"
     assert lessons[0]["status"] == "in_progress"
+    assert lessons[1]["status"] == "locked"
     assert lessons[-1]["id"] == "lesson-24"
 
 
 def test_lesson_detail_returns_structured_content(client):
     auth = register_user(client, "alex@example.com")
     headers = auth_headers(auth["access_token"])
+
+    first = client.post("/lessons/lesson-01/complete", headers=headers)
+    assert first.status_code == 200
+    second = client.post("/lessons/lesson-02/complete", headers=headers)
+    assert second.status_code == 200
 
     response = client.get("/lessons/lesson-03", headers=headers)
 
@@ -244,6 +250,47 @@ def test_lesson_detail_returns_structured_content(client):
     assert "Create one food goal" in lesson["objectives"]
     assert lesson["activity"]["type"] == "goal_builder"
     assert len(lesson["sections"]) >= 1
+
+
+def test_locked_lesson_detail_requires_previous_completion(client):
+    auth = register_user(client, "alex@example.com")
+    headers = auth_headers(auth["access_token"])
+
+    response = client.get("/lessons/lesson-02", headers=headers)
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Finish the previous lesson first"
+
+
+def test_completing_lesson_unlocks_the_next_one(client):
+    auth = register_user(client, "alex@example.com")
+    headers = auth_headers(auth["access_token"])
+
+    completed = client.post("/lessons/lesson-01/complete", headers=headers)
+
+    assert completed.status_code == 200
+    assert completed.json()["id"] == "lesson-01"
+    assert completed.json()["status"] == "completed"
+
+    listed = client.get("/lessons", headers=headers)
+    assert listed.status_code == 200
+    lessons = listed.json()
+    assert lessons[0]["status"] == "completed"
+    assert lessons[1]["status"] == "in_progress"
+
+    unlocked_detail = client.get("/lessons/lesson-02", headers=headers)
+    assert unlocked_detail.status_code == 200
+    assert unlocked_detail.json()["status"] == "in_progress"
+
+
+def test_cannot_complete_locked_lesson_out_of_order(client):
+    auth = register_user(client, "alex@example.com")
+    headers = auth_headers(auth["access_token"])
+
+    response = client.post("/lessons/lesson-02/complete", headers=headers)
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Finish the previous lesson first"
 
 
 def test_submit_message_and_retrieve_history(client):

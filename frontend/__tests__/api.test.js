@@ -1,4 +1,5 @@
 const {
+  completeLesson,
   fetchLesson,
   fetchLessons,
   fetchHealthProfile,
@@ -487,7 +488,7 @@ describe("frontend api client", () => {
           title: "SMART Goals",
           phase: "onboarding",
           summary: "Turn broad intentions into specific and measurable goals.",
-          status: "available",
+          status: "in_progress",
           objectives: ["Understand SMART goals"],
           sections: [
             {
@@ -525,6 +526,47 @@ describe("frontend api client", () => {
     expect(result.title).toBe("SMART Goals");
     expect(result.activity.type).toBe("goal_builder");
     expect(result.sections[0].title).toBe("Why SMART Goals Work");
+  });
+
+  it("completes a lesson through the backend and maps the updated detail", async () => {
+    const fetchMock = global.fetch;
+    await loginWith(fetchMock);
+
+    fetchMock.mockResolvedValueOnce(
+      createResponse({
+        json: {
+          id: "lesson-01",
+          week: 1,
+          slug: "welcome",
+          title: "Welcome",
+          phase: "onboarding",
+          summary: "Program overview and participant expectations.",
+          status: "completed",
+          objectives: ["Understand the program structure"],
+          sections: [
+            {
+              type: "text",
+              title: "Welcome",
+              content: "Let us get started.",
+              items: []
+            }
+          ],
+          activity: null
+        }
+      })
+    );
+
+    const result = await completeLesson("lesson-01");
+
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "http://127.0.0.1:8000/lessons/lesson-01/complete",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.any(Headers)
+      })
+    );
+    expect(result.status).toBe("completed");
+    expect(result.title).toBe("Welcome");
   });
 
   it("returns backend messages for the active conversation", async () => {

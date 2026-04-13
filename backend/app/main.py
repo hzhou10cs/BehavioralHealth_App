@@ -204,7 +204,30 @@ def get_lesson(
     lesson = store.get_lesson(lesson_id, user_id=int(current_account["user_id"]))
     if lesson is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    if lesson.status == "locked":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Finish the previous lesson first",
+        )
     return lesson
+
+
+@router.post("/lessons/{lesson_id}/complete", response_model=LessonDetail)
+def complete_lesson(
+    lesson_id: str, current_account: dict = Depends(get_current_account)
+) -> LessonDetail:
+    lesson = store.get_lesson(lesson_id, user_id=int(current_account["user_id"]))
+    if lesson is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    if lesson.status == "locked":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Finish the previous lesson first",
+        )
+    completed = store.complete_lesson(lesson_id, user_id=int(current_account["user_id"]))
+    if completed is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    return completed
 
 
 @router.post(

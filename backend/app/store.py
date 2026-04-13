@@ -128,6 +128,14 @@ class SQLiteAppStore:
             return None
         return _lesson_detail_model(row)
 
+    def complete_lesson(
+        self, lesson_id: str, *, user_id: int | None = None
+    ) -> LessonDetail | None:
+        row = self._db.complete_lesson_for_user(self._resolve_user_id(user_id), lesson_id)
+        if row is None:
+            return None
+        return _lesson_detail_model(row)
+
     def create_conversation(self, title: str, *, user_id: int | None = None) -> Conversation:
         conversation_id = self._db.create_conversation(
             self._resolve_user_id(user_id), title

@@ -439,6 +439,14 @@ export async function fetchLesson(lessonId: string): Promise<LessonDetail> {
   return mapLessonDetail(lesson);
 }
 
+export async function completeLesson(lessonId: string): Promise<LessonDetail> {
+  ensureAuthenticated();
+  const lesson = await request<BackendLessonDetail>(`/lessons/${lessonId}/complete`, {
+    method: "POST"
+  });
+  return mapLessonDetail(lesson);
+}
+
 export async function fetchHealthProfile(): Promise<HealthProfile> {
   ensureAuthenticated();
   const response = await request<{ profile: BackendHealthProfile }>("/auth/profile");
