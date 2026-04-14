@@ -1,4 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useTutorialTarget } from "./TutorialTarget";
 
 type ScreenHeaderProps = {
   title: string;
@@ -6,6 +7,8 @@ type ScreenHeaderProps = {
   onBack?: () => void;
   actionLabel?: string;
   onAction?: () => void;
+  backTutorialId?: string;
+  actionTutorialId?: string;
 };
 
 export default function ScreenHeader({
@@ -13,15 +16,23 @@ export default function ScreenHeader({
   description,
   onBack,
   actionLabel,
-  onAction
+  onAction,
+  backTutorialId,
+  actionTutorialId
 }: ScreenHeaderProps) {
+  const backTutorialTarget = useTutorialTarget(backTutorialId);
+  const actionTutorialTarget = useTutorialTarget(actionTutorialId);
+
   return (
     <View style={styles.screenHeader}>
       <View style={styles.row}>
         {onBack ? (
           <Pressable
+            ref={backTutorialTarget.ref}
+            collapsable={backTutorialTarget.collapsable}
             accessibilityLabel="Back"
             accessibilityRole="button"
+            onLayout={backTutorialTarget.onLayout}
             onPress={onBack}
             style={styles.button}
           >
@@ -33,8 +44,11 @@ export default function ScreenHeader({
 
         {actionLabel && onAction ? (
           <Pressable
+            ref={actionTutorialTarget.ref}
+            collapsable={actionTutorialTarget.collapsable}
             accessibilityLabel={actionLabel}
             accessibilityRole="button"
+            onLayout={actionTutorialTarget.onLayout}
             onPress={onAction}
             style={styles.button}
           >
@@ -63,8 +77,12 @@ const styles = StyleSheet.create({
   button: {
     paddingVertical: 6,
     paddingHorizontal: 10,
+    minWidth: 84,
     borderRadius: 999,
-    backgroundColor: "#dbeafe"
+    borderWidth: 1,
+    borderColor: "#93c5fd",
+    backgroundColor: "#dbeafe",
+    alignItems: "center"
   },
   spacer: {
     width: 72

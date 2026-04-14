@@ -5,6 +5,7 @@ const { Text, TextInput } = require("react-native");
 
 const App = require("../App").default;
 const { resetClientStateForTests } = require("../lib/api");
+const { formatMessageTimestamp } = require("../lib/formatMessageTimestamp");
 
 function createResponse({ ok = true, status = 200, json }) {
   return {
@@ -33,6 +34,7 @@ describe("App integration", () => {
     global.fetch = jest.fn();
     resetClientStateForTests();
     jest.spyOn(console, "warn").mockImplementation(() => {});
+    jest.spyOn(console, "error").mockImplementation(() => {});
   });
 
   it("logs in, sends a message through the backend flow, and updates chat and history UI", async () => {
@@ -43,7 +45,8 @@ describe("App integration", () => {
           json: {
             access_token: "development-token",
             token_type: "bearer",
-            user_name: "alex"
+            user_name: "alex",
+            tutorial_required: false
           }
         })
       )
@@ -130,6 +133,26 @@ describe("App integration", () => {
             }
           ]
         })
+      )
+      .mockResolvedValueOnce(
+        createResponse({
+          json: [
+            {
+              id: "msg-1",
+              conversation_id: "conv-1",
+              role: "user",
+              content: "I feel overwhelmed.",
+              created_at: "2026-03-24T18:01:00.000Z"
+            },
+            {
+              id: "msg-2",
+              conversation_id: "conv-1",
+              role: "assistant",
+              content: "Thanks for sharing that. I hear you saying: 'I feel overwhelmed.'.",
+              created_at: "2026-03-24T18:01:10.000Z"
+            }
+          ]
+        })
       );
 
     let renderer;
@@ -191,6 +214,7 @@ describe("App integration", () => {
           value.includes("Thanks for sharing that. I hear you saying")
       )
     ).toBe(true);
+    expect(chatTexts).toContain(formatMessageTimestamp("2026-03-24T18:01:00.000Z"));
 
     await act(async () => {
       root.findByProps({ accessibilityLabel: "Back" }).props.onPress();
@@ -205,5 +229,16 @@ describe("App integration", () => {
     await flushPromises();
 
     expect(getTextValues(root)).toContain("alex's Session");
+
+    await act(async () => {
+      root.findByProps({ accessibilityLabel: "Open alex's Session" }).props.onPress();
+    });
+    await flushPromises();
+
+    const historyTexts = getTextValues(root);
+    expect(historyTexts).toContain("Conversation History");
+    expect(historyTexts).toContain("I feel overwhelmed.");
+    expect(historyTexts).toContain(formatMessageTimestamp("2026-03-24T18:01:00.000Z"));
+    expect(root.findAllByProps({ accessibilityLabel: "Send" })).toHaveLength(0);
   });
 });

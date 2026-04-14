@@ -1,9 +1,12 @@
 const {
+  completeLesson,
+  fetchConversationHistory,
   fetchLesson,
   fetchLessons,
   fetchHealthProfile,
   fetchChatHistory,
   fetchMessages,
+  completeTutorial,
   login,
   register,
   resetClientStateForTests,
@@ -33,7 +36,8 @@ describe("frontend api client", () => {
         json: {
           access_token: "development-token",
           token_type: "bearer",
-          user_name: "alex"
+          user_name: "alex",
+          tutorial_required: true
         }
       })
     );
@@ -55,7 +59,8 @@ describe("frontend api client", () => {
     );
     expect(result).toEqual({
       accessToken: "development-token",
-      userName: "alex"
+      userName: "alex",
+      tutorialRequired: true
     });
   });
 
@@ -67,7 +72,8 @@ describe("frontend api client", () => {
         json: {
           access_token: "development-token",
           token_type: "bearer",
-          user_name: "alex"
+          user_name: "alex",
+          tutorial_required: true
         }
       })
     );
@@ -108,8 +114,32 @@ describe("frontend api client", () => {
     );
     expect(result).toEqual({
       accessToken: "development-token",
-      userName: "alex"
+      userName: "alex",
+      tutorialRequired: true
     });
+  });
+
+  it("marks the first-time tutorial as completed", async () => {
+    const fetchMock = global.fetch;
+    await loginWith(fetchMock);
+
+    fetchMock.mockResolvedValueOnce(
+      createResponse({
+        json: {
+          tutorial_required: false
+        }
+      })
+    );
+
+    await completeTutorial();
+
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "http://127.0.0.1:8000/auth/tutorial/complete",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.any(Headers)
+      })
+    );
   });
 
   it("loads the saved health profile from the backend", async () => {
@@ -405,6 +435,55 @@ describe("frontend api client", () => {
     ]);
   });
 
+  it("loads a saved conversation transcript by conversation id", async () => {
+    const fetchMock = global.fetch;
+    await loginWith(fetchMock);
+
+    fetchMock.mockResolvedValueOnce(
+      createResponse({
+        json: [
+          {
+            id: "msg-1",
+            conversation_id: "conv-1",
+            role: "user",
+            content: "I feel stressed.",
+            created_at: "2026-03-24T18:01:00.000Z"
+          },
+          {
+            id: "msg-2",
+            conversation_id: "conv-1",
+            role: "assistant",
+            content: "Tell me more about what happened.",
+            created_at: "2026-03-24T18:02:00.000Z"
+          }
+        ]
+      })
+    );
+
+    const result = await fetchConversationHistory("conv-1");
+
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "http://127.0.0.1:8000/conversations/conv-1/history",
+      expect.objectContaining({
+        headers: expect.any(Headers)
+      })
+    );
+    expect(result).toEqual([
+      {
+        id: "msg-1",
+        role: "user",
+        text: "I feel stressed.",
+        createdAt: "2026-03-24T18:01:00.000Z"
+      },
+      {
+        id: "msg-2",
+        role: "assistant",
+        text: "Tell me more about what happened.",
+        createdAt: "2026-03-24T18:02:00.000Z"
+      }
+    ]);
+  });
+
   it("loads lesson summaries from the backend", async () => {
     const fetchMock = global.fetch;
     await loginWith(fetchMock);
@@ -459,7 +538,7 @@ describe("frontend api client", () => {
           title: "SMART Goals",
           phase: "onboarding",
           summary: "Turn broad intentions into specific and measurable goals.",
-          status: "available",
+          status: "in_progress",
           objectives: ["Understand SMART goals"],
           sections: [
             {
@@ -497,6 +576,47 @@ describe("frontend api client", () => {
     expect(result.title).toBe("SMART Goals");
     expect(result.activity.type).toBe("goal_builder");
     expect(result.sections[0].title).toBe("Why SMART Goals Work");
+  });
+
+  it("completes a lesson through the backend and maps the updated detail", async () => {
+    const fetchMock = global.fetch;
+    await loginWith(fetchMock);
+
+    fetchMock.mockResolvedValueOnce(
+      createResponse({
+        json: {
+          id: "lesson-01",
+          week: 1,
+          slug: "welcome",
+          title: "Welcome",
+          phase: "onboarding",
+          summary: "Program overview and participant expectations.",
+          status: "completed",
+          objectives: ["Understand the program structure"],
+          sections: [
+            {
+              type: "text",
+              title: "Welcome",
+              content: "Let us get started.",
+              items: []
+            }
+          ],
+          activity: null
+        }
+      })
+    );
+
+    const result = await completeLesson("lesson-01");
+
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "http://127.0.0.1:8000/lessons/lesson-01/complete",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.any(Headers)
+      })
+    );
+    expect(result.status).toBe("completed");
+    expect(result.title).toBe("Welcome");
   });
 
   it("returns backend messages for the active conversation", async () => {
@@ -550,7 +670,8 @@ async function loginWith(fetchMock) {
       json: {
         access_token: "alex-token",
         token_type: "bearer",
-        user_name: "alex"
+        user_name: "alex",
+        tutorial_required: false
       }
     })
   );

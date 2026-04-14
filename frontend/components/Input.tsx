@@ -1,18 +1,24 @@
 import { useMemo } from "react";
 import { StyleSheet, Text, TextInput, View, type TextInputProps } from "react-native";
+import { useTutorialTarget } from "./TutorialTarget";
 
 type InputProps = TextInputProps & {
   label: string;
+  tutorialId?: string;
 };
 
-export default function Input({ label, ...props }: InputProps) {
+export default function Input({ label, tutorialId, ...props }: InputProps) {
   const accessibilityLabel = useMemo(() => props.accessibilityLabel ?? label, [props.accessibilityLabel, label]);
+  const tutorialTarget = useTutorialTarget(tutorialId);
 
   return (
     <View style={styles.wrap}>
       <Text style={styles.label}>{label}</Text>
       <TextInput
+        ref={tutorialTarget.ref}
+        collapsable={tutorialTarget.collapsable}
         accessibilityLabel={accessibilityLabel}
+        onLayout={tutorialTarget.onLayout}
         placeholderTextColor="#94a3b8"
         style={styles.input}
         {...props}

@@ -34,6 +34,7 @@ class SQLiteHealthChatStore:
                 email TEXT NOT NULL UNIQUE,
                 name TEXT NOT NULL DEFAULT '',
                 user_id INTEGER,
+                tutorial_completed INTEGER NOT NULL DEFAULT 0,
                 health_profile_json TEXT NOT NULL DEFAULT '{}',
                 password_salt TEXT NOT NULL,
                 password_hash TEXT NOT NULL,
@@ -133,6 +134,10 @@ class SQLiteHealthChatStore:
             self.conn.execute("ALTER TABLE auth_users ADD COLUMN name TEXT NOT NULL DEFAULT ''")
         if "user_id" not in auth_user_columns:
             self.conn.execute("ALTER TABLE auth_users ADD COLUMN user_id INTEGER")
+        if "tutorial_completed" not in auth_user_columns:
+            self.conn.execute(
+                "ALTER TABLE auth_users ADD COLUMN tutorial_completed INTEGER NOT NULL DEFAULT 0"
+            )
         if "health_profile_json" not in auth_user_columns:
             self.conn.execute("ALTER TABLE auth_users ADD COLUMN health_profile_json TEXT NOT NULL DEFAULT '{}'")
         self.conn.execute(
@@ -207,11 +212,9 @@ class SQLiteHealthChatStore:
             (user_id,),
         ).fetchall()
         existing_ids = {str(row["lesson_id"]) for row in existing_rows}
-        for index, lesson in enumerate(LESSON_DEFINITIONS):
+        for lesson in LESSON_DEFINITIONS:
             if lesson["id"] in existing_ids:
                 continue
-            status = "in_progress" if index == 0 else "available"
-            started_at = self._timestamp() if index == 0 else None
             self.conn.execute(
                 """
                 INSERT INTO user_lesson_progress (
@@ -219,8 +222,70 @@ class SQLiteHealthChatStore:
                 )
                 VALUES (?, ?, ?, ?, NULL, ?)
                 """,
-                (user_id, lesson["id"], status, started_at, self._timestamp()),
+                (user_id, lesson["id"], "locked", None, self._timestamp()),
             )
+        self._normalize_lesson_progress_for_user(user_id)
+        self.conn.commit()
+
+    def _normalize_lesson_progress_for_user(self, user_id: int) -> None:
+        rows = self.conn.execute(
+            """
+            SELECT
+                ulp.lesson_id,
+                ulp.status,
+                ulp.started_at,
+                ulp.completed_at
+            FROM user_lesson_progress ulp
+            JOIN lesson_definitions ld ON ld.id = ulp.lesson_id
+            WHERE ulp.user_id = ?
+            ORDER BY ld.week ASC
+            """,
+            (user_id,),
+        ).fetchall()
+        first_incomplete_seen = False
+
+        for row in rows:
+            current_status = str(row["status"])
+            lesson_id = str(row["lesson_id"])
+            started_at = row["started_at"]
+            completed_at = row["completed_at"]
+
+            if current_status == "completed":
+                target_status = "completed"
+            elif not first_incomplete_seen:
+                target_status = "in_progress"
+                first_incomplete_seen = True
+            else:
+                target_status = "locked"
+
+            next_started_at = started_at
+            next_completed_at = completed_at
+
+            if target_status == "in_progress" and not next_started_at:
+                next_started_at = self._timestamp()
+            if target_status != "completed":
+                next_completed_at = None
+
+            if (
+                current_status != target_status
+                or started_at != next_started_at
+                or completed_at != next_completed_at
+            ):
+                self.conn.execute(
+                    """
+                    UPDATE user_lesson_progress
+                    SET status = ?, started_at = ?, completed_at = ?, updated_at = ?
+                    WHERE user_id = ? AND lesson_id = ?
+                    """,
+                    (
+                        target_status,
+                        next_started_at,
+                        next_completed_at,
+                        self._timestamp(),
+                        user_id,
+                        lesson_id,
+                    ),
+                )
 
     def create_user(self, user_key: str, goals: dict[str, Any] | None = None) -> int:
         goals = goals or {}
@@ -290,7 +355,7 @@ class SQLiteHealthChatStore:
     def get_auth_user_by_email(self, email: str) -> dict[str, Any] | None:
         row = self.conn.execute(
             """
-            SELECT id, email, name, user_id, password_salt, password_hash, health_profile_json, created_at
+            SELECT id, email, name, user_id, tutorial_completed, password_salt, password_hash, health_profile_json, created_at
             FROM auth_users
             WHERE email = ?
             """,
@@ -301,13 +366,24 @@ class SQLiteHealthChatStore:
     def get_auth_user_by_id(self, auth_user_id: int) -> dict[str, Any] | None:
         row = self.conn.execute(
             """
-            SELECT id, email, name, user_id, password_salt, password_hash, health_profile_json, created_at
+            SELECT id, email, name, user_id, tutorial_completed, password_salt, password_hash, health_profile_json, created_at
             FROM auth_users
             WHERE id = ?
             """,
             (auth_user_id,),
         ).fetchone()
         return dict(row) if row is not None else None
+
+    def mark_tutorial_completed_for_auth_user(self, auth_user_id: int) -> None:
+        self.conn.execute(
+            """
+            UPDATE auth_users
+            SET tutorial_completed = 1
+            WHERE id = ?
+            """,
+            (auth_user_id,),
+        )
+        self.conn.commit()
     def get_health_profile_for_auth_user(self, auth_user_id: int) -> dict[str, Any]:
         row = self.conn.execute(
             """
@@ -385,6 +461,30 @@ class SQLiteHealthChatStore:
             (user_id, lesson_id),
         ).fetchone()
         return dict(row) if row is not None else None
+
+    def complete_lesson_for_user(self, user_id: int, lesson_id: str) -> dict[str, Any] | None:
+        self.ensure_lesson_progress_for_user(user_id)
+        row = self.get_lesson_for_user(user_id, lesson_id)
+        if row is None:
+            return None
+        if str(row["status"]) == "locked":
+            raise ValueError("locked")
+        if str(row["status"]) != "completed":
+            now = self._timestamp()
+            self.conn.execute(
+                """
+                UPDATE user_lesson_progress
+                SET status = 'completed',
+                    started_at = COALESCE(started_at, ?),
+                    completed_at = ?,
+                    updated_at = ?
+                WHERE user_id = ? AND lesson_id = ?
+                """,
+                (now, now, now, user_id, lesson_id),
+            )
+            self._normalize_lesson_progress_for_user(user_id)
+            self.conn.commit()
+        return self.get_lesson_for_user(user_id, lesson_id)
 
     def update_goals(self, user_id: int, goals: dict[str, Any]) -> None:
         self.conn.execute(

@@ -1,4 +1,5 @@
-import { StyleSheet, Text, View } from "react-native";
+import { router } from "expo-router";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { ChatSession } from "../lib/api";
 
 type ChatHistoryListProps = {
@@ -13,12 +14,25 @@ export default function ChatHistoryList({ sessions }: ChatHistoryListProps) {
   return (
     <View style={styles.list}>
       {sessions.map((session) => (
-        <View key={session.id} style={styles.item}>
+        <Pressable
+          key={session.id}
+          accessibilityRole="button"
+          accessibilityLabel={`Open ${session.title}`}
+          onPress={() =>
+            router.push(
+              (`/history/${session.id}?title=${encodeURIComponent(session.title)}`) as never
+            )
+          }
+          style={({ pressed }) => [
+            styles.item,
+            pressed && styles.pressedItem
+          ]}
+        >
           <Text style={styles.title}>{session.title}</Text>
           <Text style={styles.date}>
             Last updated: {new Date(session.updatedAt).toLocaleDateString("en-US")}
           </Text>
-        </View>
+        </Pressable>
       ))}
     </View>
   );
@@ -38,6 +52,9 @@ const styles = StyleSheet.create({
     padding: 12,
     backgroundColor: "#ffffff",
     gap: 4
+  },
+  pressedItem: {
+    opacity: 0.88
   },
   title: {
     fontWeight: "700",
