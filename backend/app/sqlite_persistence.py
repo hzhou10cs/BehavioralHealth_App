@@ -699,6 +699,13 @@ class SQLiteHealthChatStore:
         self.conn.commit()
         return int(cur.lastrowid)
 
+    def mark_tutorial_completed_for_auth_user(self, auth_user_id: int) -> None:
+        self.conn.execute(
+            "UPDATE auth_users SET tutorial_completed = 1 WHERE id = ?",
+            (auth_user_id,),
+        )
+        self.conn.commit()
+
     def get_chat_history(self, conversation_id: int) -> list[dict[str, Any]]:
         rows = self.conn.execute(
             """
