@@ -35,6 +35,11 @@ class LoginResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user_name: str
+    tutorial_required: bool = False
+
+
+class TutorialStatusResponse(BaseModel):
+    tutorial_required: bool
 
 
 class HealthProfileResponse(BaseModel):

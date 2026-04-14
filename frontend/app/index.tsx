@@ -1,4 +1,4 @@
-import { Redirect, router } from "expo-router";
+import { Redirect } from "expo-router";
 import { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import AppShell from "../components/AppShell";
@@ -37,6 +37,11 @@ export default function LoginRoute() {
   const [isRegistering, setIsRegistering] = useState(false);
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
+  const [redirectTarget, setRedirectTarget] = useState<string | null>(null);
+
+  if (redirectTarget && isAuthenticated) {
+    return <Redirect href={redirectTarget as never} />;
+  }
 
   if (isAuthenticated) {
     return <Redirect href="/home" />;
@@ -112,12 +117,13 @@ export default function LoginRoute() {
         });
 
         await updateHealthProfile(signupProfile);
+        setStatus("");
+        setRedirectTarget("/home");
       } else {
         await signIn({ email: email.trim(), password });
+        setStatus("");
+        setRedirectTarget("/home");
       }
-
-      setStatus("");
-      router.replace("/home");
     } catch (error) {
       const fallback = isRegistering ? "Unable to create account" : "Unable to sign in";
       setStatus(error instanceof Error ? error.message : fallback);

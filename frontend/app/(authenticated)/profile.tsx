@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { router } from "expo-router";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import AppShell from "../../components/AppShell";
@@ -6,6 +6,9 @@ import Button from "../../components/Button";
 import Card from "../../components/Card";
 import Input from "../../components/Input";
 import ScreenHeader from "../../components/ScreenHeader";
+import { useTutorialLayout } from "../../components/TutorialLayoutContext";
+import { useSession } from "../../lib/session";
+import { TUTORIAL_OVERLAY_SPACE } from "../../lib/tutorial";
 import {
   fetchHealthProfile,
   updateHealthProfile,
@@ -31,9 +34,12 @@ const EMPTY_PROFILE: HealthProfile = {
 };
 
 export default function ProfileRoute() {
+  const { tutorialRequired, activeTutorialTargetId } = useSession();
   const [profile, setProfile] = useState<HealthProfile>(EMPTY_PROFILE);
   const [status, setStatus] = useState("Loading profile...");
   const [saving, setSaving] = useState(false);
+  const scrollRef = useRef<ScrollView | null>(null);
+  const { requestMeasure } = useTutorialLayout();
 
   useEffect(() => {
     let mounted = true;
@@ -60,6 +66,17 @@ export default function ProfileRoute() {
   function update<K extends keyof HealthProfile>(key: K, value: HealthProfile[K]) {
     setProfile((current) => ({ ...current, [key]: value }));
   }
+
+  function revealTutorialTarget() {
+    if (activeTutorialTargetId === "profile-save") {
+      scrollRef.current?.scrollToEnd({ animated: true });
+      setTimeout(() => requestMeasure("profile-save"), 250);
+    }
+  }
+
+  useEffect(() => {
+    revealTutorialTarget();
+  }, [activeTutorialTargetId]);
 
   async function handleSave() {
     const required: Array<[string, string]> = [
@@ -93,11 +110,20 @@ export default function ProfileRoute() {
 
   return (
     <AppShell title="Health Profile" keyboardAware>
-      <ScrollView contentContainerStyle={styles.screen} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        ref={scrollRef}
+        contentContainerStyle={[
+          styles.screen,
+          tutorialRequired && styles.tutorialScreen
+        ]}
+        keyboardShouldPersistTaps="handled"
+        onContentSizeChange={revealTutorialTarget}
+      >
         <ScreenHeader
           title="Health Intake Profile"
           description="Review and edit the same health information captured during account creation."
           actionLabel="Back"
+          actionTutorialId="shared-back"
           onAction={() => router.back()}
         />
 
@@ -123,7 +149,12 @@ export default function ProfileRoute() {
 
         <Card title="Save">
           <View style={styles.saveArea}>
-            <Button accessibilityLabel="Save health profile" onPress={handleSave} disabled={saving}>
+            <Button
+              accessibilityLabel="Save health profile"
+              tutorialId="profile-save"
+              onPress={handleSave}
+              disabled={saving}
+            >
               {saving ? "Saving..." : "Save Profile"}
             </Button>
             <Text style={styles.statusText}>{status}</Text>
@@ -138,6 +169,9 @@ const styles = StyleSheet.create({
   screen: {
     gap: 14,
     paddingBottom: 24
+  },
+  tutorialScreen: {
+    paddingBottom: TUTORIAL_OVERLAY_SPACE + 24
   },
   saveArea: {
     gap: 8
