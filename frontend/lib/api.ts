@@ -143,11 +143,18 @@ const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
 let accessToken: string | null = null;
 let activeConversationId: string | null = null;
 let currentUserName = "";
+let forceNewConversation = false;
 
 export function logout() {
   accessToken = null;
   activeConversationId = null;
   currentUserName = "";
+  forceNewConversation = false;
+}
+
+export function endConversation() {
+  activeConversationId = null;
+  forceNewConversation = true;
 }
 
 export function resetClientStateForTests() {
@@ -306,22 +313,25 @@ async function listConversations(): Promise<BackendConversation[]> {
 }
 
 async function getActiveConversationId(createIfMissing: boolean): Promise<string | null> {
-  if (activeConversationId) {
+  if (activeConversationId && !forceNewConversation) {
     return activeConversationId;
   }
 
-  const conversations = await listConversations();
-  const latestConversation = conversations[conversations.length - 1];
+  if (!forceNewConversation) {
+    const conversations = await listConversations();
+    const latestConversation = conversations[conversations.length - 1];
 
-  if (latestConversation) {
-    activeConversationId = latestConversation.id;
-    return activeConversationId;
+    if (latestConversation) {
+      activeConversationId = latestConversation.id;
+      return activeConversationId;
+    }
   }
 
   if (!createIfMissing) {
     return null;
   }
 
+  forceNewConversation = false;
   const title = currentUserName ? `${currentUserName}'s Session` : "Therapy Session";
   const created = await request<BackendConversation>("/conversations", {
     method: "POST",

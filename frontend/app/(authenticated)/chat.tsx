@@ -10,7 +10,7 @@ import ScreenHeader from "../../components/ScreenHeader";
 import { useTutorialLayout } from "../../components/TutorialLayoutContext";
 import { useSession } from "../../lib/session";
 import { TUTORIAL_OVERLAY_SPACE, TUTORIAL_REVEAL_TARGETS } from "../../lib/tutorial";
-import { fetchMessages, sendMessage, type ChatMessage } from "../../lib/api";
+import { fetchMessages, sendMessage, type ChatMessage, endConversation } from "../../lib/api";
 
 export default function ChatRoute() {
   const { userName, tutorialRequired, activeTutorialTargetId } = useSession();
@@ -95,6 +95,14 @@ export default function ChatRoute() {
           />
           <Button accessibilityLabel="Send" tutorialId="chat-send" onPress={onSend}>
             Send
+          </Button>
+          <Button accessibilityLabel="End Conversation" onPress={() => { 
+            endConversation(); 
+            setMessages([]); 
+            setDraft(""); 
+            setStatus("Conversation ended. Start a new conversation."); 
+          }}>
+            End Conversation
           </Button>
         </Card>
       </ScrollView>
