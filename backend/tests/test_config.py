@@ -13,6 +13,9 @@ def test_env_based_configuration(monkeypatch):
     monkeypatch.setenv("BHA_ASSISTANT_TIMEOUT_SECONDS", "12.5")
     monkeypatch.setenv("BHA_ASSISTANT_INCLUDE_FEWSHOT", "false")
     monkeypatch.setenv("BHA_ASSISTANT_RECENT_HISTORY_TURNS", "3")
+    monkeypatch.setenv("BHA_AUTH_TOKEN_EXPIRATION_SECONDS", "1800")
+    monkeypatch.setenv("BHA_AUTH_MAX_FAILED_LOGIN_ATTEMPTS", "4")
+    monkeypatch.setenv("BHA_AUTH_LOCKOUT_DURATION_SECONDS", "600")
     get_settings.cache_clear()
 
     settings = get_settings()
@@ -20,6 +23,9 @@ def test_env_based_configuration(monkeypatch):
     assert settings.app_env == "test"
     assert settings.debug is False
     assert settings.auth_secret_key == "test-secret"
+    assert settings.auth_token_expiration_seconds == 1800
+    assert settings.auth_max_failed_login_attempts == 4
+    assert settings.auth_lockout_duration_seconds == 600
     assert settings.api_prefix == "/v1"
     assert settings.sqlite_db_path == "data/test.sqlite3"
     assert settings.assistant_test_mode is False

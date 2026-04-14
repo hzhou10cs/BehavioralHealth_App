@@ -38,6 +38,8 @@ class SQLiteHealthChatStore:
                 health_profile_json TEXT NOT NULL DEFAULT '{}',
                 password_salt TEXT NOT NULL,
                 password_hash TEXT NOT NULL,
+                failed_login_attempts INTEGER NOT NULL DEFAULT 0,
+                locked_until TEXT,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             );
@@ -140,6 +142,10 @@ class SQLiteHealthChatStore:
             )
         if "health_profile_json" not in auth_user_columns:
             self.conn.execute("ALTER TABLE auth_users ADD COLUMN health_profile_json TEXT NOT NULL DEFAULT '{}'")
+        if "failed_login_attempts" not in auth_user_columns:
+            self.conn.execute("ALTER TABLE auth_users ADD COLUMN failed_login_attempts INTEGER NOT NULL DEFAULT 0")
+        if "locked_until" not in auth_user_columns:
+            self.conn.execute("ALTER TABLE auth_users ADD COLUMN locked_until TEXT")
         self.conn.execute(
             """
             UPDATE auth_users
@@ -343,8 +349,17 @@ class SQLiteHealthChatStore:
         user_id = self.ensure_user(self._auth_user_key(normalized_email))
         cur = self.conn.execute(
             """
-            INSERT INTO auth_users (email, name, user_id, password_salt, password_hash, health_profile_json)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO auth_users (
+                email,
+                name,
+                user_id,
+                password_salt,
+                password_hash,
+                health_profile_json,
+                failed_login_attempts,
+                locked_until
+            )
+            VALUES (?, ?, ?, ?, ?, ?, 0, NULL)
             """,
             (normalized_email, resolved_name, user_id, password_salt, password_hash, health_profile_json),
         )
@@ -355,7 +370,8 @@ class SQLiteHealthChatStore:
     def get_auth_user_by_email(self, email: str) -> dict[str, Any] | None:
         row = self.conn.execute(
             """
-            SELECT id, email, name, user_id, tutorial_completed, password_salt, password_hash, health_profile_json, created_at
+            SELECT id, email, name, user_id, password_salt, password_hash,
+                   health_profile_json, failed_login_attempts, locked_until, created_at
             FROM auth_users
             WHERE email = ?
             """,
@@ -366,7 +382,8 @@ class SQLiteHealthChatStore:
     def get_auth_user_by_id(self, auth_user_id: int) -> dict[str, Any] | None:
         row = self.conn.execute(
             """
-            SELECT id, email, name, user_id, tutorial_completed, password_salt, password_hash, health_profile_json, created_at
+            SELECT id, email, name, user_id, password_salt, password_hash,
+                   health_profile_json, failed_login_attempts, locked_until, created_at
             FROM auth_users
             WHERE id = ?
             """,
@@ -374,16 +391,40 @@ class SQLiteHealthChatStore:
         ).fetchone()
         return dict(row) if row is not None else None
 
-    def mark_tutorial_completed_for_auth_user(self, auth_user_id: int) -> None:
+    def increment_failed_login_attempts(
+        self, auth_user_id: int, lockout_until: str | None = None
+    ) -> int:
+        if lockout_until is None:
+            self.conn.execute(
+                "UPDATE auth_users SET failed_login_attempts = failed_login_attempts + 1 WHERE id = ?",
+                (auth_user_id,),
+            )
+        else:
+            self.conn.execute(
+                """
+                UPDATE auth_users
+                SET failed_login_attempts = failed_login_attempts + 1,
+                    locked_until = ?
+                WHERE id = ?
+                """,
+                (lockout_until, auth_user_id),
+            )
+        self.conn.commit()
+        row = self.get_auth_user_by_id(auth_user_id)
+        return int(row["failed_login_attempts"]) if row is not None else 0
+
+    def reset_failed_login_attempts(self, auth_user_id: int) -> None:
         self.conn.execute(
             """
             UPDATE auth_users
-            SET tutorial_completed = 1
+            SET failed_login_attempts = 0,
+                locked_until = NULL
             WHERE id = ?
             """,
             (auth_user_id,),
         )
         self.conn.commit()
+
     def get_health_profile_for_auth_user(self, auth_user_id: int) -> dict[str, Any]:
         row = self.conn.execute(
             """

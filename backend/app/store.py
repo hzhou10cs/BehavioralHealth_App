@@ -110,6 +110,16 @@ class SQLiteAppStore:
             health_profile_json=health_profile_json,
         )
 
+    def increment_failed_login_attempts(
+        self, auth_user_id: int, lockout_until: str | None = None
+    ) -> int:
+        return self._db.increment_failed_login_attempts(
+            auth_user_id, lockout_until=lockout_until
+        )
+
+    def reset_failed_login_attempts(self, auth_user_id: int) -> None:
+        self._db.reset_failed_login_attempts(auth_user_id)
+
     def get_health_profile_for_auth_user(self, auth_user_id: int) -> dict:
         return self._db.get_health_profile_for_auth_user(auth_user_id)
 

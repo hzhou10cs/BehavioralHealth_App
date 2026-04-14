@@ -15,6 +15,9 @@ class Settings(BaseSettings):
         default="development-secret-key",
         validation_alias=AliasChoices("BHA_AUTH_SECRET_KEY", "BHA_AUTH_TOKEN"),
     )
+    auth_token_expiration_seconds: int = 3600
+    auth_max_failed_login_attempts: int = 5
+    auth_lockout_duration_seconds: int = 300
     sqlite_db_path: str = "data/behavioral_health.sqlite3"
     assistant_test_mode: bool = True
     assistant_llm_base_url: str = "http://127.0.0.1:8001"
