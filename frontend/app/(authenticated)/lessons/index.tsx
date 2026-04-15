@@ -45,7 +45,7 @@ export default function LessonsRoute() {
       <View style={styles.screen}>
         <ScreenHeader
           title="SMART Lessons"
-          description="Follow the weekly lesson plan in order. Finish each lesson to unlock the next one."
+          description="Follow the lesson plan in order. Finish each lesson to unlock the next one."
           onBack={() => router.back()}
           backTutorialId="shared-back"
         />
@@ -59,7 +59,7 @@ export default function LessonsRoute() {
           ]}
         >
           {lessons.map((lesson, index) => (
-            <Card key={lesson.id} title={`Week ${lesson.week}: ${lesson.title}`}>
+            <Card key={lesson.id} title={`Lesson ${lesson.week}: ${lesson.title}`}>
               <View style={styles.metaRow}>
                 <Text style={styles.phaseText}>{formatPhase(lesson.phase)}</Text>
                 <Text

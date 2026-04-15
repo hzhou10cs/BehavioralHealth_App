@@ -80,15 +80,15 @@ const styles = StyleSheet.create({
     minWidth: 84,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "#93c5fd",
-    backgroundColor: "#dbeafe",
+    borderColor: "#782F40",
+    backgroundColor: "#782F40",
     alignItems: "center"
   },
   spacer: {
     width: 72
   },
   buttonText: {
-    color: "#1d4ed8",
+    color: "#ffffff",
     fontWeight: "700"
   },
   title: {

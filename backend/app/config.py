@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     assistant_timeout_seconds: float = 60.0
     assistant_include_fewshot: bool = True
     assistant_recent_history_turns: int = 5
+    assistant_debug_logging: bool = False
 
     model_config = SettingsConfigDict(
         env_prefix="BHA_",

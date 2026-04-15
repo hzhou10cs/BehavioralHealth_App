@@ -40,7 +40,7 @@ export default function Button({
 
 const styles = StyleSheet.create({
   button: {
-    backgroundColor: "#2563eb",
+    backgroundColor: "#782F40",
     borderRadius: 10,
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -50,7 +50,7 @@ const styles = StyleSheet.create({
     opacity: 0.86
   },
   disabledButton: {
-    backgroundColor: "#93c5fd"
+    backgroundColor: "#b78c96"
   },
   text: {
     color: "#ffffff",

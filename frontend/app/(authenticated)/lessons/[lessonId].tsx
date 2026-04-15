@@ -63,10 +63,10 @@ export default function LessonDetailRoute() {
     <AppShell title="Lesson Detail">
       <View style={styles.screen}>
         <ScreenHeader
-          title={lesson ? `Week ${lesson.week}: ${lesson.title}` : "Lesson Detail"}
+          title={lesson ? `Lesson ${lesson.week}: ${lesson.title}` : "Lesson Detail"}
           description={
             lesson
-              ? "Read the key ideas for this week and bring them into your chat or action plan."
+              ? "Read the key ideas for this lesson and bring them into your chat or action plan."
               : "Open a lesson to view its summary, key ideas, and activity."
           }
           onBack={() => router.back()}

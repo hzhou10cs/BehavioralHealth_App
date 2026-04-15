@@ -2,6 +2,7 @@ import json
 
 from app.config import Settings
 from app.schemas import (
+    CompletedConversation,
     Conversation,
     LessonActivity,
     LessonDetail,
@@ -24,6 +25,16 @@ def _conversation_model(row: dict) -> Conversation:
         title=row["title"],
         created_at=row["created_at"],
         updated_at=row["updated_at"],
+    )
+
+
+def _completed_conversation_model(row: dict) -> CompletedConversation:
+    return CompletedConversation(
+        id=f"conv-{row['id']}",
+        title=row["title"],
+        created_at=row["created_at"],
+        updated_at=row["updated_at"],
+        lesson_number=int(row.get("lesson_number") or 1),
     )
 
 
@@ -158,7 +169,17 @@ class SQLiteAppStore:
     def list_conversations(self, *, user_id: int | None = None) -> list[Conversation]:
         return [
             _conversation_model(row)
-            for row in self._db.list_conversations_for_user(
+            for row in self._db.list_active_conversations_for_user(
+                self._resolve_user_id(user_id)
+            )
+        ]
+
+    def list_completed_conversations(
+        self, *, user_id: int | None = None
+    ) -> list[CompletedConversation]:
+        return [
+            _completed_conversation_model(row)
+            for row in self._db.list_completed_conversations_for_user(
                 self._resolve_user_id(user_id)
             )
         ]
@@ -224,16 +245,30 @@ class SQLiteAppStore:
     def get_latest_session_report(
         self, conversation_id: str, *, user_id: int | None = None
     ) -> str:
-        reports = self.list_session_reports(conversation_id, user_id=user_id)
-        return reports[-1] if reports else ""
+        internal_id = _parse_prefixed_id(conversation_id, "conv-")
+        if not self.has_conversation(conversation_id, user_id=user_id):
+            raise ValueError(f"Conversation {conversation_id} was not found")
+        return self._db.get_conversation_session_report(internal_id)
 
     def add_session_report(
-        self, conversation_id: str, report: str, *, user_id: int | None = None
+        self,
+        conversation_id: str,
+        report: str,
+        *,
+        user_id: int | None = None,
+        lesson_number: int = 1,
     ) -> None:
         internal_id = _parse_prefixed_id(conversation_id, "conv-")
         if not self.has_conversation(conversation_id, user_id=user_id):
             raise ValueError(f"Conversation {conversation_id} was not found")
-        self._db.add_conversation_session_report(internal_id, report)
+        self._db.add_conversation_session_report(
+            internal_id, report, lesson_number=lesson_number
+        )
+
+    def is_conversation_ended(
+        self, conversation_id: str, *, user_id: int | None = None
+    ) -> bool:
+        return bool(self.get_latest_session_report(conversation_id, user_id=user_id))
 
 
 def build_store(settings: Settings) -> SQLiteAppStore:

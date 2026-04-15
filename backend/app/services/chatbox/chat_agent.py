@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 
 from app.schemas import Message
 from app.services.chatbox.client import OpenAIStyleClient
-from app.services.chatbox.prompts import (
+from app.services.chatbox.chat_prompts import (
     COACH_SYSTEM_PROMPT_FEWSHOT,
     COACH_SYSTEM_PROMPT_IDENTITY,
 )
@@ -20,6 +21,7 @@ class ChatboxChatAgentConfig:
     include_fewshot: bool = True
     recent_history_turns: int = 5
     base_prompt: str | None = None
+    debug_logging: bool = False
 
 
 class ChatboxChatAgent:
@@ -36,6 +38,8 @@ class ChatboxChatAgent:
             config.model_name,
             api_key=config.api_key,
             timeout=config.timeout_seconds,
+            debug_logging=config.debug_logging,
+            component_name="chat_agent",
         )
 
     def _build_system_messages(
@@ -159,6 +163,7 @@ class ChatboxChatAgent:
         prompt_patch: str | None = None,
         base_prompt: str | None = None,
         memory_text: str | None = None,
+        include_fewshot: bool | None = None,
     ) -> str:
         user_messages = [
             message for message in conversation_messages if message.role == "user"
@@ -184,10 +189,18 @@ class ChatboxChatAgent:
             prompt_patch=prompt_patch,
             base_prompt=base_prompt,
             memory_text=memory_text,
+            include_fewshot=include_fewshot,
         )
+        if self.config.debug_logging:
+            print(
+                f"[ChatAgent] request_messages={json.dumps(request_messages, ensure_ascii=False)}",
+                flush=True,
+            )
         try:
             return self.client.chat(request_messages)
         except Exception as exc:
+            if self.config.debug_logging:
+                print(f"[ChatAgent] reply_error={exc}", flush=True)
             return (
                 "[LLM error] Failed to get reply from the migrated chat service: "
                 f"{exc}"

@@ -427,9 +427,159 @@ def test_create_assistant_reply(client):
 
     auth_user_id = auth_user_id_for("alex@example.com")
     assert main_module.store.get_coach_state(conversation_id, user_id=auth_user_id)
-    assert main_module.store.get_latest_session_report(
-        conversation_id, user_id=auth_user_id
+    assert (
+        main_module.store.get_latest_session_report(
+            conversation_id, user_id=auth_user_id
+        )
+        == ""
     )
+
+
+def test_first_turn_first_session_uses_first_session_prompt(client, monkeypatch):
+    auth = register_user(client, "alex@example.com")
+    headers = auth_headers(auth["access_token"])
+    conversation = client.post(
+        "/conversations",
+        json={"title": "First Session"},
+        headers=headers,
+    ).json()
+    conversation_id = conversation["id"]
+
+    client.post(
+        f"/conversations/{conversation_id}/messages",
+        json={"role": "user", "content": "I want to get healthier."},
+        headers=headers,
+    )
+
+    captured: dict[str, object] = {}
+
+    def fake_generate_assistant_reply(
+        messages, *, memory_text="", prompt_patch=None, base_prompt=None, include_fewshot=None
+    ):
+        captured["base_prompt"] = base_prompt
+        captured["include_fewshot"] = include_fewshot
+        captured["prompt_patch"] = prompt_patch
+        captured["memory_text"] = memory_text
+        captured["user_message"] = messages[-1].content if messages else ""
+        return "first-session-reply"
+
+    monkeypatch.setattr(main_module, "generate_assistant_reply", fake_generate_assistant_reply)
+
+    reply = client.post(f"/conversations/{conversation_id}/assistant-reply", headers=headers)
+    assert reply.status_code == 201
+    assert reply.json()["content"] == "first-session-reply"
+    assert captured["base_prompt"] == main_module.COACH_SYSTEM_PROMPT_1ST_SESSION
+    assert captured["include_fewshot"] is False
+    assert captured["prompt_patch"] is None
+    assert captured["user_message"] == "I want to get healthier."
+    assert "Current CST:" in str(captured["memory_text"])
+
+
+def test_first_turn_of_non_first_session_uses_default_prompt(client, monkeypatch):
+    auth = register_user(client, "alex@example.com")
+    headers = auth_headers(auth["access_token"])
+
+    first_conversation = client.post(
+        "/conversations",
+        json={"title": "Session One"},
+        headers=headers,
+    ).json()
+    first_conversation_id = first_conversation["id"]
+    client.post(
+        f"/conversations/{first_conversation_id}/messages",
+        json={"role": "user", "content": "First session message."},
+        headers=headers,
+    )
+    client.post(f"/conversations/{first_conversation_id}/assistant-reply", headers=headers)
+
+    second_conversation = client.post(
+        "/conversations",
+        json={"title": "Session Two"},
+        headers=headers,
+    ).json()
+    second_conversation_id = second_conversation["id"]
+    client.post(
+        f"/conversations/{second_conversation_id}/messages",
+        json={"role": "user", "content": "Second session first turn."},
+        headers=headers,
+    )
+
+    captured: dict[str, object] = {}
+
+    def fake_generate_assistant_reply(
+        messages, *, memory_text="", prompt_patch=None, base_prompt=None, include_fewshot=None
+    ):
+        captured["base_prompt"] = base_prompt
+        captured["include_fewshot"] = include_fewshot
+        captured["prompt_patch"] = prompt_patch
+        return "default-session-reply"
+
+    monkeypatch.setattr(main_module, "generate_assistant_reply", fake_generate_assistant_reply)
+
+    reply = client.post(f"/conversations/{second_conversation_id}/assistant-reply", headers=headers)
+    assert reply.status_code == 201
+    assert reply.json()["content"] == "default-session-reply"
+    assert captured["base_prompt"] is None
+    assert captured["include_fewshot"] is None
+    assert captured["prompt_patch"] is None
+
+
+def test_prompt_patch_is_injected_after_first_turn(client, monkeypatch):
+    auth = register_user(client, "alex@example.com")
+    headers = auth_headers(auth["access_token"])
+    conversation = client.post(
+        "/conversations",
+        json={"title": "Patched Session"},
+        headers=headers,
+    ).json()
+    conversation_id = conversation["id"]
+
+    client.post(
+        f"/conversations/{conversation_id}/messages",
+        json={"role": "user", "content": "I want to improve sleep."},
+        headers=headers,
+    )
+    first_reply = client.post(f"/conversations/{conversation_id}/assistant-reply", headers=headers)
+    assert first_reply.status_code == 201
+
+    client.post(
+        f"/conversations/{conversation_id}/messages",
+        json={"role": "user", "content": "I can start tomorrow night."},
+        headers=headers,
+    )
+
+    class FakeGenerator:
+        def generate_prompt_patch(self, cst_state, *, chat_history_text=None, meta_text=None):
+            return (
+                "<PATCH>\n"
+                "FOCUS: sleep\n"
+                "MISSING_SMART_ASPECT: M/A/R/T\n"
+                "PRIORITY: moveon_to_next_smartgoal\n"
+                "ASK_TYPE: summarize_and_check\n"
+                "</PATCH>"
+            )
+
+    monkeypatch.setattr(main_module, "build_generator_agent", lambda: FakeGenerator())
+
+    captured: dict[str, object] = {}
+
+    def fake_generate_assistant_reply(
+        messages, *, memory_text="", prompt_patch=None, base_prompt=None, include_fewshot=None
+    ):
+        captured["prompt_patch"] = prompt_patch
+        captured["base_prompt"] = base_prompt
+        return "patched-reply"
+
+    monkeypatch.setattr(main_module, "generate_assistant_reply", fake_generate_assistant_reply)
+
+    second_reply = client.post(
+        f"/conversations/{conversation_id}/assistant-reply",
+        headers=headers,
+    )
+    assert second_reply.status_code == 201
+    assert second_reply.json()["content"] == "patched-reply"
+    assert captured["base_prompt"] is None
+    assert "FOCUS: sleep" in str(captured["prompt_patch"])
 
 
 def test_conversation_list_shows_updated_timestamp_after_messages(client):
@@ -457,29 +607,38 @@ def test_conversation_list_shows_updated_timestamp_after_messages(client):
     assert body[0]["updated_at"] != created["updated_at"]
 
 
-def test_assistant_reply_uses_latest_session_report_as_memory(client, monkeypatch):
+def test_assistant_reply_memory_uses_previous_sessions_not_current_session(client, monkeypatch):
     auth = register_user(client, "alex@example.com")
     headers = auth_headers(auth["access_token"])
-    conversation = client.post(
+    first_conversation = client.post(
         "/conversations",
-        json={"title": "Memory Session"},
+        json={"title": "Session 1"},
         headers=headers,
     ).json()
-    conversation_id = conversation["id"]
+    first_conversation_id = first_conversation["id"]
 
     client.post(
-        f"/conversations/{conversation_id}/messages",
+        f"/conversations/{first_conversation_id}/messages",
         json={"role": "user", "content": "I want to sleep earlier this week."},
         headers=headers,
     )
     first_reply = client.post(
-        f"/conversations/{conversation_id}/assistant-reply",
+        f"/conversations/{first_conversation_id}/assistant-reply",
         headers=headers,
     )
     assert first_reply.status_code == 201
+    ended = client.post(f"/conversations/{first_conversation_id}/end-session", headers=headers)
+    assert ended.status_code == 200
+
+    second_conversation = client.post(
+        "/conversations",
+        json={"title": "Session 2"},
+        headers=headers,
+    ).json()
+    second_conversation_id = second_conversation["id"]
 
     client.post(
-        f"/conversations/{conversation_id}/messages",
+        f"/conversations/{second_conversation_id}/messages",
         json={"role": "user", "content": "I was still awake at 1 AM last night."},
         headers=headers,
     )
@@ -493,14 +652,73 @@ def test_assistant_reply_uses_latest_session_report_as_memory(client, monkeypatc
     monkeypatch.setattr(main_module, "generate_assistant_reply", fake_generate_assistant_reply)
 
     second_reply = client.post(
-        f"/conversations/{conversation_id}/assistant-reply",
+        f"/conversations/{second_conversation_id}/assistant-reply",
         headers=headers,
     )
     assert second_reply.status_code == 201
     assert second_reply.json()["content"] == "memory aware reply"
-    assert "Last session report:" in captured["memory_text"]
-    assert "Session Stage Report - Session" in captured["memory_text"]
+    assert "Previous session summarized reports:" in captured["memory_text"]
+    assert "Summarized report for session 1:" in captured["memory_text"]
+    assert f"Session {first_conversation_id}" in captured["memory_text"]
     assert "Current CST:" in captured["memory_text"]
+
+
+def test_assistant_reply_memory_concatenates_previous_reports_in_session_order(client, monkeypatch):
+    auth = register_user(client, "alex@example.com")
+    headers = auth_headers(auth["access_token"])
+    finished_conversation_ids: list[str] = []
+
+    for index in range(2):
+        conversation = client.post(
+            "/conversations",
+            json={"title": f"Finished Session {index + 1}"},
+            headers=headers,
+        ).json()
+        conversation_id = conversation["id"]
+        finished_conversation_ids.append(conversation_id)
+        client.post(
+            f"/conversations/{conversation_id}/messages",
+            json={"role": "user", "content": f"Finished session message {index + 1}"},
+            headers=headers,
+        )
+        client.post(f"/conversations/{conversation_id}/assistant-reply", headers=headers)
+        end_response = client.post(f"/conversations/{conversation_id}/end-session", headers=headers)
+        assert end_response.status_code == 200
+
+    active_conversation = client.post(
+        "/conversations",
+        json={"title": "Active Session"},
+        headers=headers,
+    ).json()
+    active_conversation_id = active_conversation["id"]
+    client.post(
+        f"/conversations/{active_conversation_id}/messages",
+        json={"role": "user", "content": "New session kickoff"},
+        headers=headers,
+    )
+
+    captured: dict[str, str] = {}
+
+    def fake_generate_assistant_reply(messages, *, memory_text="", prompt_patch=None):
+        captured["memory_text"] = memory_text
+        return "ordered-memory-reply"
+
+    monkeypatch.setattr(main_module, "generate_assistant_reply", fake_generate_assistant_reply)
+
+    response = client.post(
+        f"/conversations/{active_conversation_id}/assistant-reply",
+        headers=headers,
+    )
+    assert response.status_code == 201
+    memory_text = captured["memory_text"]
+    assert "Summarized report for session 1:" in memory_text
+    assert "Summarized report for session 2:" in memory_text
+    assert (
+        memory_text.index("Summarized report for session 1:")
+        < memory_text.index("Summarized report for session 2:")
+    )
+    assert f"Session {finished_conversation_ids[0]}" in memory_text
+    assert f"Session {finished_conversation_ids[1]}" in memory_text
 
 
 def test_debug_endpoints_return_coach_state_and_session_reports(client):
@@ -533,8 +751,103 @@ def test_debug_endpoints_return_coach_state_and_session_reports(client):
     assert session_reports.status_code == 200
     reports_body = session_reports.json()
     assert reports_body["conversation_id"] == conversation_id
+    assert reports_body["session_reports"] == []
+
+    ended = client.post(f"/conversations/{conversation_id}/end-session", headers=headers)
+    assert ended.status_code == 200
+    assert "Session Stage Report - Session" in ended.json()["report"]
+
+    session_reports = client.get(
+        f"/conversations/{conversation_id}/session-reports",
+        headers=headers,
+    )
+    assert session_reports.status_code == 200
+    reports_body = session_reports.json()
+    assert reports_body["conversation_id"] == conversation_id
     assert len(reports_body["session_reports"]) == 1
     assert "Session Stage Report - Session" in reports_body["session_reports"][0]
+
+
+def test_end_session_generates_single_summary_and_locks_conversation(client):
+    auth = register_user(client, "alex@example.com")
+    headers = auth_headers(auth["access_token"])
+    conversation = client.post(
+        "/conversations",
+        json={"title": "Wrap-up Session"},
+        headers=headers,
+    ).json()
+    conversation_id = conversation["id"]
+
+    client.post(
+        f"/conversations/{conversation_id}/messages",
+        json={"role": "user", "content": "I made progress with a short walk."},
+        headers=headers,
+    )
+    client.post(f"/conversations/{conversation_id}/assistant-reply", headers=headers)
+
+    first = client.post(f"/conversations/{conversation_id}/end-session", headers=headers)
+    assert first.status_code == 200
+    assert "Session Stage Report - Session" in first.json()["report"]
+
+    second = client.post(f"/conversations/{conversation_id}/end-session", headers=headers)
+    assert second.status_code == 200
+    assert second.json()["report"] == first.json()["report"]
+
+    reports = client.get(f"/conversations/{conversation_id}/session-reports", headers=headers)
+    assert reports.status_code == 200
+    assert len(reports.json()["session_reports"]) == 1
+
+    blocked_message = client.post(
+        f"/conversations/{conversation_id}/messages",
+        json={"role": "user", "content": "Can I keep chatting?"},
+        headers=headers,
+    )
+    assert blocked_message.status_code == 409
+
+    blocked_reply = client.post(f"/conversations/{conversation_id}/assistant-reply", headers=headers)
+    assert blocked_reply.status_code == 409
+
+
+def test_completed_conversations_only_include_ended_sessions(client):
+    auth = register_user(client, "alex@example.com")
+    headers = auth_headers(auth["access_token"])
+    active = client.post(
+        "/conversations",
+        json={"title": "Active Session"},
+        headers=headers,
+    ).json()
+    completed = client.post(
+        "/conversations",
+        json={"title": "Completed Session"},
+        headers=headers,
+    ).json()
+
+    client.post(
+        f"/conversations/{completed['id']}/messages",
+        json={"role": "user", "content": "Wrapping up this session."},
+        headers=headers,
+    )
+    client.post(f"/conversations/{completed['id']}/assistant-reply", headers=headers)
+    client.post(f"/conversations/{completed['id']}/end-session", headers=headers)
+
+    listed_active = client.get("/conversations", headers=headers)
+    assert listed_active.status_code == 200
+    active_ids = [item["id"] for item in listed_active.json()]
+    assert active["id"] in active_ids
+    assert completed["id"] not in active_ids
+
+    listed_completed = client.get("/conversations/completed", headers=headers)
+    assert listed_completed.status_code == 200
+    completed_ids = [item["id"] for item in listed_completed.json()]
+    assert completed["id"] in completed_ids
+    assert active["id"] not in completed_ids
+
+    summary = client.get(
+        f"/conversations/{completed['id']}/session-summary",
+        headers=headers,
+    )
+    assert summary.status_code == 200
+    assert "Session Stage Report - Session" in summary.json()["report"]
 
 
 def test_message_history_persists_after_store_restart(client):
@@ -589,3 +902,9 @@ def test_message_routes_return_404_for_unknown_conversation(client):
 
     reports = client.get("/conversations/conv-999/session-reports", headers=headers)
     assert reports.status_code == 404
+
+    summary = client.get("/conversations/conv-999/session-summary", headers=headers)
+    assert summary.status_code == 404
+
+    end_session = client.post("/conversations/conv-999/end-session", headers=headers)
+    assert end_session.status_code == 404

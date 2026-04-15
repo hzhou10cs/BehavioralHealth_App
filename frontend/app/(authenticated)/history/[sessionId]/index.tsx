@@ -1,22 +1,22 @@
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { ScrollView, StyleSheet, Text } from "react-native";
-import AppShell from "../../../components/AppShell";
-import Card from "../../../components/Card";
-import ConversationTranscript from "../../../components/ConversationTranscript";
-import ScreenHeader from "../../../components/ScreenHeader";
-import { useSession } from "../../../lib/session";
-import { TUTORIAL_OVERLAY_SPACE } from "../../../lib/tutorial";
-import { fetchConversationHistory, type ChatMessage } from "../../../lib/api";
+import AppShell from "../../../../components/AppShell";
+import Card from "../../../../components/Card";
+import ConversationTranscript from "../../../../components/ConversationTranscript";
+import ScreenHeader from "../../../../components/ScreenHeader";
+import { useSession } from "../../../../lib/session";
+import { TUTORIAL_OVERLAY_SPACE } from "../../../../lib/tutorial";
+import { fetchConversationHistory, type ChatMessage } from "../../../../lib/api";
 
 export default function ConversationHistoryRoute() {
   const { tutorialRequired } = useSession();
-  const params = useLocalSearchParams<{ sessionId?: string; title?: string }>();
+  const params = useLocalSearchParams<{ sessionId?: string; label?: string }>();
   const sessionId = readParam(params.sessionId);
-  const sessionTitle = useMemo(() => {
-    const title = readParam(params.title);
-    return title ? safeDecodeParam(title) : "Saved Session";
-  }, [params.title]);
+  const sessionLabel = useMemo(() => {
+    const label = readParam(params.label);
+    return label ? safeDecodeParam(label) : "Saved Session";
+  }, [params.label]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [status, setStatus] = useState("Loading conversation...");
 
@@ -59,7 +59,7 @@ export default function ConversationHistoryRoute() {
           onBack={() => router.back()}
         />
 
-        <Card title={sessionTitle}>
+        <Card title={`${sessionLabel} History`}>
           <Text style={styles.note}>Messages are shown exactly as they were sent in this session.</Text>
           <ConversationTranscript
             messages={messages}

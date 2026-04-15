@@ -31,6 +31,7 @@ class ChatboxExtractorAgent:
         model_name: str,
         api_key: str | None = None,
         timeout_seconds: float = 60.0,
+        debug_logging: bool = False,
     ) -> None:
         self.test_mode = test_mode
         self.client = OpenAIStyleClient(
@@ -38,6 +39,8 @@ class ChatboxExtractorAgent:
             model_name,
             api_key=api_key,
             timeout=timeout_seconds,
+            debug_logging=debug_logging,
+            component_name="extractor_agent",
         )
 
     def build_messages(self, agent_text: str | None, user_text: str) -> list[dict[str, str]]:
