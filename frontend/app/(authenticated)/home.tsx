@@ -1,13 +1,41 @@
 import { router } from "expo-router";
+import { useIsFocused } from "@react-navigation/native";
+import { useEffect, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import AppShell from "../../components/AppShell";
 import Button from "../../components/Button";
 import Card from "../../components/Card";
 import ScreenHeader from "../../components/ScreenHeader";
+import { hasActiveConversation } from "../../lib/api";
 import { useSession } from "../../lib/session";
 
 export default function HomeRoute() {
   const { beginTutorial, signOut, userName } = useSession();
+  const isFocused = useIsFocused();
+  const [hasActiveSession, setHasActiveSession] = useState(false);
+
+  useEffect(() => {
+    if (!isFocused) {
+      return;
+    }
+
+    let mounted = true;
+    hasActiveConversation()
+      .then((active) => {
+        if (!mounted) return;
+        setHasActiveSession(active);
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setHasActiveSession(false);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [isFocused]);
+
+  const sessionActionLabel = hasActiveSession ? "Continue Session" : "New Session";
 
   return (
     <AppShell title="Behavioral Health Home">
@@ -25,7 +53,7 @@ export default function HomeRoute() {
 
         <Card title="Navigation">
           <Text style={styles.copy}>
-            Open your weekly lessons, continue the active support conversation, or review saved sessions.
+            Open your lessons, continue the active support conversation, or review saved sessions.
           </Text>
           <Button
             accessibilityLabel="Open Lessons"
@@ -35,25 +63,25 @@ export default function HomeRoute() {
             Open Lessons
           </Button>
           <Button
-            accessibilityLabel="Open Chat"
+            accessibilityLabel={sessionActionLabel}
             tutorialId="home-open-chat"
             onPress={() => router.push("/chat")}
           >
-            Open Chat
+            {sessionActionLabel}
           </Button>
           <Button
-            accessibilityLabel="Open History"
+            accessibilityLabel="Session History"
             tutorialId="home-open-history"
             onPress={() => router.push("/history")}
           >
-            Open History
+            Session History
           </Button>
           <Button
-            accessibilityLabel="Open Health Profile"
+            accessibilityLabel="Edit Health Profile"
             tutorialId="home-open-profile"
             onPress={() => router.push("../profile")}
           >
-            Open Health Profile
+            Edit Health Profile
           </Button>
         </Card>
 

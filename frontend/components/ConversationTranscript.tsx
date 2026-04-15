@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { ScrollView, StyleSheet, Text } from "react-native";
 import type { ChatMessage } from "../lib/api";
 import MessageBubble from "./MessageBubble";
@@ -13,10 +14,27 @@ export default function ConversationTranscript({
   status,
   emptyLabel = "No messages yet."
 }: ConversationTranscriptProps) {
+  const transcriptRef = useRef<ScrollView | null>(null);
+
+  function scrollToLatest(animated: boolean) {
+    transcriptRef.current?.scrollToEnd({ animated });
+  }
+
+  useEffect(() => {
+    const timer = setTimeout(() => scrollToLatest(true), 0);
+    return () => clearTimeout(timer);
+  }, [messages.length, messages[messages.length - 1]?.id, status]);
+
   return (
     <>
       {status ? <Text style={styles.statusText}>{status}</Text> : null}
-      <ScrollView style={styles.messagesWrap} contentContainerStyle={styles.messagesContent}>
+      <ScrollView
+        ref={transcriptRef}
+        style={styles.messagesWrap}
+        contentContainerStyle={styles.messagesContent}
+        onLayout={() => scrollToLatest(false)}
+        onContentSizeChange={() => scrollToLatest(true)}
+      >
         {messages.length ? (
           messages.map((message) => <MessageBubble key={message.id} message={message} />)
         ) : !status ? (
@@ -29,18 +47,16 @@ export default function ConversationTranscript({
 
 const styles = StyleSheet.create({
   statusText: {
-    color: "#334155"
+    color: "#475569",
+    fontSize: 13
   },
   messagesWrap: {
-    maxHeight: 280,
-    minHeight: 150,
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-    borderRadius: 10,
-    backgroundColor: "#f8fafc"
+    maxHeight: 420,
+    minHeight: 220
   },
   messagesContent: {
-    padding: 10
+    paddingVertical: 8,
+    gap: 6
   },
   emptyText: {
     color: "#64748b"

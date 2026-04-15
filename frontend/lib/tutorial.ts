@@ -20,7 +20,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     route: "/home",
     targetId: "home-open-lessons",
     title: "Lessons",
-    description: "Start here to open the weekly lesson list and review the program content.",
+    description: "Start here to open the lesson list and review the program content.",
     preferredPlacement: "below"
   },
   {
@@ -40,8 +40,8 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
   {
     route: "/home",
     targetId: "home-open-chat",
-    title: "Open Chat",
-    description: "Open Chat any time you want to continue your conversation with the assistant.",
+    title: "Session Button",
+    description: "Use this button to continue an active session or start a new one.",
     preferredPlacement: "above"
   },
   {
@@ -61,8 +61,8 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
   {
     route: "/home",
     targetId: "home-open-history",
-    title: "Open History",
-    description: "Open History to review the sessions that have already been saved to your account.",
+    title: "Session History",
+    description: "Open Session History to review the sessions that have already been saved to your account.",
     preferredPlacement: "above"
   },
   {
@@ -75,7 +75,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
   {
     route: "/home",
     targetId: "home-open-profile",
-    title: "Health Profile",
+    title: "Edit Health Profile",
     description: "Use this to review or update the health information you entered during registration.",
     preferredPlacement: "above"
   },

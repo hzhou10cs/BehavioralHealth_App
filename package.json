@@ -13,5 +13,8 @@
     "frontend:phone": "node scripts/run-frontend.mjs --phone",
     "app": "node scripts/run-app.mjs",
     "app:phone": "node scripts/run-app.mjs --phone"
+  },
+  "dependencies": {
+    "expo": "^55.0.15"
   }
 }

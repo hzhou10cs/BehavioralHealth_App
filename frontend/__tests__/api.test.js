@@ -5,8 +5,10 @@ const {
   fetchLessons,
   fetchHealthProfile,
   fetchChatHistory,
+  fetchConversationSummary,
   fetchMessages,
   completeTutorial,
+  endConversation,
   login,
   register,
   resetClientStateForTests,
@@ -412,7 +414,8 @@ describe("frontend api client", () => {
             id: "conv-1",
             title: "Test Session",
             created_at: "2026-03-24T18:00:00.000Z",
-            updated_at: "2026-03-24T18:05:00.000Z"
+            updated_at: "2026-03-24T18:05:00.000Z",
+            lesson_number: 2
           }
         ]
       })
@@ -421,7 +424,7 @@ describe("frontend api client", () => {
     const result = await fetchChatHistory();
 
     expect(fetchMock).toHaveBeenLastCalledWith(
-      "http://127.0.0.1:8000/conversations",
+      "http://127.0.0.1:8000/conversations/completed",
       expect.objectContaining({
         headers: expect.any(Headers)
       })
@@ -430,9 +433,60 @@ describe("frontend api client", () => {
       {
         id: "conv-1",
         title: "Test Session",
-        updatedAt: "2026-03-24T18:05:00.000Z"
+        updatedAt: "2026-03-24T18:05:00.000Z",
+        lessonNumber: 2
       }
     ]);
+  });
+
+  it("ends the active conversation and returns a generated summary", async () => {
+    const fetchMock = global.fetch;
+
+    await loginWith(fetchMock);
+
+    fetchMock
+      .mockResolvedValueOnce(
+        createResponse({
+          json: [
+            {
+              id: "conv-1",
+              title: "alex's Session",
+              created_at: "2026-03-24T18:00:00.000Z",
+              updated_at: "2026-03-24T18:00:00.000Z"
+            }
+          ]
+        })
+      )
+      .mockResolvedValueOnce(
+        createResponse({
+          json: {
+            conversation_id: "conv-1",
+            report: "Session Stage Report - Session conv-1"
+          }
+        })
+      );
+
+    const summary = await endConversation();
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "http://127.0.0.1:8000/conversations",
+      expect.objectContaining({
+        headers: expect.any(Headers)
+      })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      "http://127.0.0.1:8000/conversations/conv-1/end-session",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.any(Headers)
+      })
+    );
+    expect(summary).toEqual({
+      conversationId: "conv-1",
+      report: "Session Stage Report - Session conv-1"
+    });
   });
 
   it("loads a saved conversation transcript by conversation id", async () => {
@@ -482,6 +536,33 @@ describe("frontend api client", () => {
         createdAt: "2026-03-24T18:02:00.000Z"
       }
     ]);
+  });
+
+  it("loads a saved conversation summary by conversation id", async () => {
+    const fetchMock = global.fetch;
+    await loginWith(fetchMock);
+
+    fetchMock.mockResolvedValueOnce(
+      createResponse({
+        json: {
+          conversation_id: "conv-1",
+          report: "Session Stage Report - Session conv-1"
+        }
+      })
+    );
+
+    const result = await fetchConversationSummary("conv-1");
+
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "http://127.0.0.1:8000/conversations/conv-1/session-summary",
+      expect.objectContaining({
+        headers: expect.any(Headers)
+      })
+    );
+    expect(result).toEqual({
+      conversationId: "conv-1",
+      report: "Session Stage Report - Session conv-1"
+    });
   });
 
   it("loads lesson summaries from the backend", async () => {

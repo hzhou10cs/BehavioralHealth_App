@@ -350,15 +350,15 @@ const styles = StyleSheet.create({
     paddingVertical: 12
   },
   primaryActionButton: {
-    backgroundColor: "#ea580c"
+    backgroundColor: "#782F40"
   },
   confirmActionButton: {
-    backgroundColor: "#dc2626"
+    backgroundColor: "#782F40"
   },
   secondaryActionButton: {
-    backgroundColor: "#ffffff",
+    backgroundColor: "#782F40",
     borderWidth: 1,
-    borderColor: "#fed7aa"
+    borderColor: "#782F40"
   },
   pressedAction: {
     opacity: 0.88
@@ -371,6 +371,6 @@ const styles = StyleSheet.create({
     color: "#ffffff"
   },
   secondaryActionText: {
-    color: "#9a3412"
+    color: "#ffffff"
   }
 });

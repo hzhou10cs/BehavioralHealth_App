@@ -89,6 +89,7 @@ class SQLiteHealthChatStore:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 conversation_id INTEGER NOT NULL,
                 report_text TEXT NOT NULL,
+                lesson_number INTEGER NOT NULL DEFAULT 1,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
             );
@@ -146,6 +147,32 @@ class SQLiteHealthChatStore:
             self.conn.execute("ALTER TABLE auth_users ADD COLUMN failed_login_attempts INTEGER NOT NULL DEFAULT 0")
         if "locked_until" not in auth_user_columns:
             self.conn.execute("ALTER TABLE auth_users ADD COLUMN locked_until TEXT")
+        self.conn.execute(
+            """
+            DELETE FROM conversation_session_reports
+            WHERE id NOT IN (
+                SELECT MAX(id)
+                FROM conversation_session_reports
+                GROUP BY conversation_id
+            )
+            """
+        )
+        conversation_report_columns = {
+            row["name"]
+            for row in self.conn.execute(
+                "PRAGMA table_info(conversation_session_reports)"
+            ).fetchall()
+        }
+        if "lesson_number" not in conversation_report_columns:
+            self.conn.execute(
+                "ALTER TABLE conversation_session_reports ADD COLUMN lesson_number INTEGER NOT NULL DEFAULT 1"
+            )
+        self.conn.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_conversation_session_report_unique
+            ON conversation_session_reports(conversation_id)
+            """
+        )
         self.conn.execute(
             """
             UPDATE auth_users
@@ -370,7 +397,7 @@ class SQLiteHealthChatStore:
     def get_auth_user_by_email(self, email: str) -> dict[str, Any] | None:
         row = self.conn.execute(
             """
-            SELECT id, email, name, user_id, password_salt, password_hash,
+            SELECT id, email, name, user_id, tutorial_completed, password_salt, password_hash,
                    health_profile_json, failed_login_attempts, locked_until, created_at
             FROM auth_users
             WHERE email = ?
@@ -382,7 +409,7 @@ class SQLiteHealthChatStore:
     def get_auth_user_by_id(self, auth_user_id: int) -> dict[str, Any] | None:
         row = self.conn.execute(
             """
-            SELECT id, email, name, user_id, password_salt, password_hash,
+            SELECT id, email, name, user_id, tutorial_completed, password_salt, password_hash,
                    health_profile_json, failed_login_attempts, locked_until, created_at
             FROM auth_users
             WHERE id = ?
@@ -574,6 +601,47 @@ class SQLiteHealthChatStore:
         ).fetchall()
         return [dict(row) for row in rows]
 
+    def list_active_conversations_for_user(self, user_id: int) -> list[dict[str, Any]]:
+        rows = self.conn.execute(
+            """
+            SELECT
+                c.id,
+                c.user_id,
+                c.title,
+                c.created_at,
+                COALESCE(c.updated_at, c.created_at) AS updated_at
+            FROM conversations c
+            WHERE c.user_id = ?
+              AND NOT EXISTS (
+                SELECT 1
+                FROM conversation_session_reports csr
+                WHERE csr.conversation_id = c.id
+              )
+            ORDER BY datetime(COALESCE(c.updated_at, c.created_at)) ASC, c.id ASC
+            """,
+            (user_id,),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def list_completed_conversations_for_user(self, user_id: int) -> list[dict[str, Any]]:
+        rows = self.conn.execute(
+            """
+            SELECT
+                c.id,
+                c.user_id,
+                c.title,
+                c.created_at,
+                COALESCE(c.updated_at, c.created_at) AS updated_at,
+                csr.lesson_number
+            FROM conversations c
+            JOIN conversation_session_reports csr ON csr.conversation_id = c.id
+            WHERE c.user_id = ?
+            ORDER BY datetime(COALESCE(c.updated_at, c.created_at)) ASC, c.id ASC
+            """,
+            (user_id,),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
     def get_message(self, message_id: int) -> dict[str, Any] | None:
         row = self.conn.execute(
             """
@@ -655,17 +723,39 @@ class SQLiteHealthChatStore:
         return [str(row["report_text"]) for row in rows]
 
     def add_conversation_session_report(
-        self, conversation_id: int, report_text: str
+        self, conversation_id: int, report_text: str, *, lesson_number: int = 1
     ) -> int:
+        now = self._timestamp()
         cur = self.conn.execute(
             """
-            INSERT INTO conversation_session_reports (conversation_id, report_text)
-            VALUES (?, ?)
+            INSERT INTO conversation_session_reports (conversation_id, report_text, lesson_number)
+            VALUES (?, ?, ?)
+            ON CONFLICT(conversation_id) DO UPDATE SET
+                report_text = excluded.report_text,
+                lesson_number = excluded.lesson_number,
+                created_at = CURRENT_TIMESTAMP
             """,
-            (conversation_id, report_text),
+            (conversation_id, report_text, lesson_number),
+        )
+        self.conn.execute(
+            "UPDATE conversations SET updated_at = ? WHERE id = ?",
+            (now, conversation_id),
         )
         self.conn.commit()
         return int(cur.lastrowid)
+
+    def get_conversation_session_report(self, conversation_id: int) -> str:
+        row = self.conn.execute(
+            """
+            SELECT report_text
+            FROM conversation_session_reports
+            WHERE conversation_id = ?
+            ORDER BY datetime(created_at) DESC, id DESC
+            LIMIT 1
+            """,
+            (conversation_id,),
+        ).fetchone()
+        return str(row["report_text"]) if row is not None else ""
 
     def add_coach_state(
         self, user_id: int, payload: dict[str, Any], created_at: str | None = None

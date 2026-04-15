@@ -48,6 +48,7 @@ describe("tutorial flow", () => {
           }
         })
       )
+      .mockResolvedValueOnce(createResponse({ json: [] }))
       .mockResolvedValueOnce(
         createResponse({
           json: [

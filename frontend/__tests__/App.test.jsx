@@ -39,121 +39,172 @@ describe("App integration", () => {
 
   it("logs in, sends a message through the backend flow, and updates chat and history UI", async () => {
     const fetchMock = global.fetch;
-    fetchMock
-      .mockResolvedValueOnce(
-        createResponse({
-          json: {
-            access_token: "development-token",
-            token_type: "bearer",
-            user_name: "alex",
-            tutorial_required: false
-          }
-        })
-      )
-      .mockResolvedValueOnce(
-        createResponse({
-          json: [
-            {
-              id: "lesson-01",
-              week: 1,
-              slug: "welcome",
-              title: "Welcome",
-              phase: "onboarding",
-              summary: "Program overview and participant expectations.",
-              status: "in_progress"
+
+    let conversationCreated = false;
+    let sessionEnded = false;
+
+    fetchMock.mockImplementation((url, init = {}) => {
+      const method = (init.method || "GET").toUpperCase();
+      const path = String(url).replace("http://127.0.0.1:8000", "");
+
+      if (path === "/auth/login" && method === "POST") {
+        return Promise.resolve(
+          createResponse({
+            json: {
+              access_token: "development-token",
+              token_type: "bearer",
+              user_name: "alex",
+              tutorial_required: false
             }
-          ]
-        })
-      )
-      .mockResolvedValueOnce(createResponse({ json: [] }))
-      .mockResolvedValueOnce(createResponse({ json: [] }))
-      .mockResolvedValueOnce(
-        createResponse({
-          status: 201,
-          json: {
-            id: "conv-1",
-            title: "alex's Session",
-            created_at: "2026-03-24T18:00:00.000Z",
-            updated_at: "2026-03-24T18:00:00.000Z"
-          }
-        })
-      )
-      .mockResolvedValueOnce(
-        createResponse({
-          status: 201,
-          json: {
-            id: "msg-1",
-            conversation_id: "conv-1",
-            role: "user",
-            content: "I feel overwhelmed.",
-            created_at: "2026-03-24T18:01:00.000Z"
-          }
-        })
-      )
-      .mockResolvedValueOnce(
-        createResponse({
-          status: 201,
-          json: {
-            id: "msg-2",
-            conversation_id: "conv-1",
-            role: "assistant",
-            content: "Thanks for sharing that. I hear you saying: 'I feel overwhelmed.'.",
-            created_at: "2026-03-24T18:01:10.000Z"
-          }
-        })
-      )
-      .mockResolvedValueOnce(
-        createResponse({
-          json: [
-            {
-              id: "msg-1",
-              conversation_id: "conv-1",
-              role: "user",
-              content: "I feel overwhelmed.",
-              created_at: "2026-03-24T18:01:00.000Z"
-            },
-            {
-              id: "msg-2",
-              conversation_id: "conv-1",
-              role: "assistant",
-              content: "Thanks for sharing that. I hear you saying: 'I feel overwhelmed.'.",
-              created_at: "2026-03-24T18:01:10.000Z"
-            }
-          ]
-        })
-      )
-      .mockResolvedValueOnce(
-        createResponse({
-          json: [
-            {
+          })
+        );
+      }
+
+      if (path === "/lessons" && method === "GET") {
+        return Promise.resolve(
+          createResponse({
+            json: [
+              {
+                id: "lesson-01",
+                week: 1,
+                slug: "welcome",
+                title: "Welcome",
+                phase: "onboarding",
+                summary: "Program overview and participant expectations.",
+                status: "in_progress"
+              }
+            ]
+          })
+        );
+      }
+
+      if (path === "/conversations" && method === "GET") {
+        if (conversationCreated && !sessionEnded) {
+          return Promise.resolve(
+            createResponse({
+              json: [
+                {
+                  id: "conv-1",
+                  title: "alex's Session",
+                  created_at: "2026-03-24T18:00:00.000Z",
+                  updated_at: "2026-03-24T18:01:10.000Z"
+                }
+              ]
+            })
+          );
+        }
+        return Promise.resolve(createResponse({ json: [] }));
+      }
+
+      if (path === "/conversations" && method === "POST") {
+        conversationCreated = true;
+        sessionEnded = false;
+        return Promise.resolve(
+          createResponse({
+            status: 201,
+            json: {
               id: "conv-1",
               title: "alex's Session",
               created_at: "2026-03-24T18:00:00.000Z",
-              updated_at: "2026-03-24T18:01:10.000Z"
+              updated_at: "2026-03-24T18:00:00.000Z"
             }
-          ]
-        })
-      )
-      .mockResolvedValueOnce(
-        createResponse({
-          json: [
-            {
+          })
+        );
+      }
+
+      if (path === "/conversations/conv-1/messages" && method === "POST") {
+        return Promise.resolve(
+          createResponse({
+            status: 201,
+            json: {
               id: "msg-1",
               conversation_id: "conv-1",
               role: "user",
               content: "I feel overwhelmed.",
               created_at: "2026-03-24T18:01:00.000Z"
-            },
-            {
+            }
+          })
+        );
+      }
+
+      if (path === "/conversations/conv-1/assistant-reply" && method === "POST") {
+        return Promise.resolve(
+          createResponse({
+            status: 201,
+            json: {
               id: "msg-2",
               conversation_id: "conv-1",
               role: "assistant",
               content: "Thanks for sharing that. I hear you saying: 'I feel overwhelmed.'.",
               created_at: "2026-03-24T18:01:10.000Z"
             }
-          ]
+          })
+        );
+      }
+
+      if (path === "/conversations/conv-1/history" && method === "GET") {
+        return Promise.resolve(
+          createResponse({
+            json: [
+              {
+                id: "msg-1",
+                conversation_id: "conv-1",
+                role: "user",
+                content: "I feel overwhelmed.",
+                created_at: "2026-03-24T18:01:00.000Z"
+              },
+              {
+                id: "msg-2",
+                conversation_id: "conv-1",
+                role: "assistant",
+                content: "Thanks for sharing that. I hear you saying: 'I feel overwhelmed.'.",
+                created_at: "2026-03-24T18:01:10.000Z"
+              }
+            ]
+          })
+        );
+      }
+
+      if (path === "/conversations/conv-1/end-session" && method === "POST") {
+        sessionEnded = true;
+        return Promise.resolve(
+          createResponse({
+            json: {
+              conversation_id: "conv-1",
+              report:
+                "Session Stage Report - Session conv-1\nSession with details:\nSummary text"
+            }
+          })
+        );
+      }
+
+      if (path === "/conversations/completed" && method === "GET") {
+        if (!sessionEnded) {
+          return Promise.resolve(createResponse({ json: [] }));
+        }
+        return Promise.resolve(
+          createResponse({
+            json: [
+              {
+                id: "conv-1",
+                title: "alex's Session",
+                created_at: "2026-03-24T18:00:00.000Z",
+                updated_at: "2026-03-24T18:10:00.000Z",
+                lesson_number: 1
+              }
+            ]
+          })
+        );
+      }
+
+      return Promise.resolve(
+        createResponse({
+          ok: false,
+          status: 404,
+          json: { detail: `Unhandled mock route: ${method} ${path}` },
         })
       );
+    });
 
     let renderer;
     await act(async () => {
@@ -181,7 +232,7 @@ describe("App integration", () => {
     });
     await flushPromises();
 
-    expect(getTextValues(root)).toContain("Week 1: Welcome");
+    expect(getTextValues(root)).toContain("Lesson 1: Welcome");
 
     await act(async () => {
       root.findByProps({ accessibilityLabel: "Back" }).props.onPress();
@@ -189,7 +240,7 @@ describe("App integration", () => {
     await flushPromises();
 
     await act(async () => {
-      root.findByProps({ accessibilityLabel: "Open Chat" }).props.onPress();
+      root.findByProps({ accessibilityLabel: "New Session" }).props.onPress();
     });
     await flushPromises();
 
@@ -217,6 +268,22 @@ describe("App integration", () => {
     expect(chatTexts).toContain(formatMessageTimestamp("2026-03-24T18:01:00.000Z"));
 
     await act(async () => {
+      root.findByProps({ accessibilityLabel: "End Conversation" }).props.onPress();
+    });
+    await flushPromises();
+
+    const summaryTexts = getTextValues(root);
+    expect(summaryTexts).toContain("-- Summary of current session --");
+    expect(summaryTexts).toContain("--END--");
+    expect(
+      summaryTexts.some(
+        (value) =>
+          typeof value === "string" &&
+          value.includes("Session Stage Report - Session conv-1")
+      )
+    ).toBe(true);
+
+    await act(async () => {
       root.findByProps({ accessibilityLabel: "Back" }).props.onPress();
     });
     await flushPromises();
@@ -224,14 +291,14 @@ describe("App integration", () => {
     expect(getTextValues(root)).toContain("Hello, alex");
 
     await act(async () => {
-      root.findByProps({ accessibilityLabel: "Open History" }).props.onPress();
+      root.findByProps({ accessibilityLabel: "Session History" }).props.onPress();
     });
     await flushPromises();
 
-    expect(getTextValues(root)).toContain("alex's Session");
+    expect(getTextValues(root)).toContain("Session 1");
 
     await act(async () => {
-      root.findByProps({ accessibilityLabel: "Open alex's Session" }).props.onPress();
+      root.findByProps({ accessibilityLabel: "Open history for Session 1" }).props.onPress();
     });
     await flushPromises();
 

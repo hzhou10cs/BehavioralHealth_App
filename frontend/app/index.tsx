@@ -5,8 +5,14 @@ import AppShell from "../components/AppShell";
 import Button from "../components/Button";
 import Card from "../components/Card";
 import Input from "../components/Input";
+import SingleSelectChips from "../components/SingleSelectChips";
 import ScreenHeader from "../components/ScreenHeader";
 import { updateHealthProfile, type HealthProfile } from "../lib/api";
+import {
+  formatHeightParts,
+  GENDER_OPTIONS,
+  normalizeWeightLbs,
+} from "../lib/healthProfileFormat";
 import { useSession } from "../lib/session";
 
 const EMPTY_PROFILE: HealthProfile = {
@@ -34,6 +40,8 @@ export default function LoginRoute() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [profile, setProfile] = useState<HealthProfile>(EMPTY_PROFILE);
+  const [heightFeet, setHeightFeet] = useState("");
+  const [heightInches, setHeightInches] = useState("");
   const [isRegistering, setIsRegistering] = useState(false);
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
@@ -51,11 +59,19 @@ export default function LoginRoute() {
     setProfile((current) => ({ ...current, [key]: value }));
   }
 
+  function updateHeight(feet: string, inches: string) {
+    setHeightFeet(feet);
+    setHeightInches(inches);
+    updateProfile("height", formatHeightParts(feet, inches));
+  }
+
   function validateHealthProfile() {
+    const heightValue = formatHeightParts(heightFeet, heightInches);
+    const weightValue = normalizeWeightLbs(profile.initialWeight);
     const required: Array<[string, string]> = [
       ["Gender", profile.gender],
-      ["Height", profile.height],
-      ["Initial weight", profile.initialWeight],
+      ["Height", heightValue],
+      ["Initial weight", weightValue],
       ["Allergy", profile.allergy],
       ["Medication", profile.medication],
       ["Lifestyle", profile.lifestyle],
@@ -102,8 +118,12 @@ export default function LoginRoute() {
       setStatus(isRegistering ? "Creating account..." : "Signing in...");
 
       if (isRegistering) {
+        const heightValue = formatHeightParts(heightFeet, heightInches);
         const signupProfile: HealthProfile = {
           ...profile,
+          gender: profile.gender.toLowerCase(),
+          height: heightValue,
+          initialWeight: normalizeWeightLbs(profile.initialWeight),
           firstName: profile.firstName.trim() || name.trim().split(/\s+/)[0] || "",
           lastName: profile.lastName.trim() || name.trim().split(/\s+/).slice(1).join(" "),
           email: email.trim()
@@ -185,13 +205,53 @@ export default function LoginRoute() {
         {isRegistering ? (
           <>
             <Card title="Personal Information">
-              <Input label="Gender" value={profile.gender} onChangeText={(value) => updateProfile("gender", value)} />
+              <SingleSelectChips
+                label="Gender"
+                options={[...GENDER_OPTIONS]}
+                value={profile.gender.toLowerCase()}
+                onChange={(value) => updateProfile("gender", value)}
+              />
               <Input label="Occupation (optional)" value={profile.occupation} onChangeText={(value) => updateProfile("occupation", value)} />
             </Card>
 
             <Card title="Health Baseline">
-              <Input label="Height" value={profile.height} onChangeText={(value) => updateProfile("height", value)} />
-              <Input label="Initial Weight" value={profile.initialWeight} onChangeText={(value) => updateProfile("initialWeight", value)} />
+              <View style={styles.rowField}>
+                <Text style={styles.rowLabel}>Height</Text>
+                <View style={styles.inlineFields}>
+                  <View style={styles.inlineFieldItem}>
+                    <Input
+                      label="Feet"
+                      keyboardType="number-pad"
+                      value={heightFeet}
+                      onChangeText={(value) => updateHeight(value, heightInches)}
+                    />
+                  </View>
+                  <Text style={styles.unitText}>'</Text>
+                  <View style={styles.inlineFieldItem}>
+                    <Input
+                      label="Inches"
+                      keyboardType="number-pad"
+                      value={heightInches}
+                      onChangeText={(value) => updateHeight(heightFeet, value)}
+                    />
+                  </View>
+                  <Text style={styles.unitText}>"</Text>
+                </View>
+              </View>
+              <View style={styles.rowField}>
+                <Text style={styles.rowLabel}>Initial Weight</Text>
+                <View style={styles.weightRow}>
+                  <View style={styles.weightInput}>
+                    <Input
+                      label="Weight"
+                      keyboardType="decimal-pad"
+                      value={profile.initialWeight}
+                      onChangeText={(value) => updateProfile("initialWeight", normalizeWeightLbs(value))}
+                    />
+                  </View>
+                  <Text style={styles.unitText}>lbs</Text>
+                </View>
+              </View>
               <Input label="Body Measurements (optional)" value={profile.bodyMeasurements} onChangeText={(value) => updateProfile("bodyMeasurements", value)} />
               <Input label="Weight/Wellness Statement (optional)" value={profile.weightStatement} onChangeText={(value) => updateProfile("weightStatement", value)} multiline />
             </Card>
@@ -227,6 +287,9 @@ export default function LoginRoute() {
               setStatus("");
               setName("");
               setConfirmPassword("");
+              setProfile(EMPTY_PROFILE);
+              setHeightFeet("");
+              setHeightInches("");
             }}
           >
             <Text style={styles.switchText}>
@@ -248,7 +311,7 @@ const styles = StyleSheet.create({
     paddingBottom: 24
   },
   switchText: {
-    color: "#1d4ed8",
+    color: "#782F40",
     fontWeight: "600"
   },
   statusText: {
@@ -263,6 +326,34 @@ const styles = StyleSheet.create({
   hint: {
     color: "#475569",
     marginBottom: 4
+  },
+  rowField: {
+    gap: 6
+  },
+  rowLabel: {
+    fontWeight: "600",
+    color: "#334155"
+  },
+  inlineFields: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: 8
+  },
+  inlineFieldItem: {
+    flex: 1
+  },
+  weightRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: 8
+  },
+  weightInput: {
+    flex: 1
+  },
+  unitText: {
+    color: "#334155",
+    fontWeight: "700",
+    paddingBottom: 10
   }
 });
 

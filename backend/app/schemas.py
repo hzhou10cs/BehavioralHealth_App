@@ -94,6 +94,10 @@ class Conversation(BaseModel):
     updated_at: datetime
 
 
+class CompletedConversation(Conversation):
+    lesson_number: int = 1
+
+
 class MessageCreate(BaseModel):
     role: str = Field(pattern="^(user|assistant)$")
     content: str = Field(min_length=1, max_length=2000)
@@ -115,5 +119,10 @@ class CoachStateResponse(BaseModel):
 class SessionReportsResponse(BaseModel):
     conversation_id: str
     session_reports: list[str]
+
+
+class SessionSummaryResponse(BaseModel):
+    conversation_id: str
+    report: str
 
 

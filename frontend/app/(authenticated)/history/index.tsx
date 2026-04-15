@@ -41,7 +41,7 @@ export default function HistoryRoute() {
   }, [isFocused]);
 
   return (
-    <AppShell title="Chat History">
+    <AppShell title="Session History">
       <ScrollView
         contentContainerStyle={[
           styles.screen,
@@ -49,7 +49,7 @@ export default function HistoryRoute() {
         ]}
       >
         <ScreenHeader
-          title="Chat History"
+          title="Session History"
           description="Review your previous conversation sessions."
           onBack={() => router.back()}
           backTutorialId="shared-back"

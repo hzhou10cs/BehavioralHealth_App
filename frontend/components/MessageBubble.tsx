@@ -9,13 +9,20 @@ type MessageBubbleProps = {
 export default function MessageBubble({ message }: MessageBubbleProps) {
   const isUser = message.role === "user";
   const timestamp = formatMessageTimestamp(message.createdAt);
+  const roleLabel = isUser ? "You" : "Coach";
 
   return (
     <View style={[styles.row, isUser ? styles.userRow : styles.assistantRow]}>
       <View style={[styles.bubble, isUser ? styles.userBubble : styles.assistantBubble]}>
-        <Text style={styles.role}>{message.role}:</Text>
-        <Text style={styles.text}>{message.text}</Text>
-        {timestamp ? <Text style={styles.timestamp}>{timestamp}</Text> : null}
+        <Text style={styles.role}>{roleLabel}</Text>
+        <Text style={[styles.text, isUser ? styles.userText : styles.assistantText]}>
+          {message.text}
+        </Text>
+        {timestamp ? (
+          <Text style={[styles.timestamp, isUser ? styles.userTimestamp : styles.assistantTimestamp]}>
+            {timestamp}
+          </Text>
+        ) : null}
       </View>
     </View>
   );
@@ -23,38 +30,60 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
 
 const styles = StyleSheet.create({
   row: {
-    marginBottom: 10,
     width: "100%"
   },
   userRow: {
-    alignItems: "flex-end"
+    alignItems: "flex-end",
+    marginBottom: 8
   },
   assistantRow: {
-    alignItems: "flex-start"
+    alignItems: "stretch",
+    marginBottom: 12
   },
   bubble: {
-    maxWidth: "85%",
-    borderRadius: 12,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     paddingVertical: 10,
     gap: 3
   },
   userBubble: {
-    backgroundColor: "#dbeafe"
+    maxWidth: "78%",
+    borderRadius: 16,
+    backgroundColor: "#dbeafe",
+    borderWidth: 1,
+    borderColor: "#bfdbfe"
   },
   assistantBubble: {
-    backgroundColor: "#eef2ff"
+    width: "100%",
+    borderRadius: 0,
+    backgroundColor: "transparent",
+    paddingHorizontal: 2
   },
   role: {
-    textTransform: "capitalize",
     fontWeight: "700",
-    color: "#1e293b"
+    fontSize: 12,
+    color: "#64748b",
+    textTransform: "uppercase",
+    letterSpacing: 0.5
   },
   text: {
-    color: "#0f172a"
+    color: "#0f172a",
+    lineHeight: 22,
+    fontSize: 16
+  },
+  userText: {
+    fontSize: 15
+  },
+  assistantText: {
+    fontSize: 16
   },
   timestamp: {
     fontSize: 12,
     color: "#64748b"
+  },
+  userTimestamp: {
+    textAlign: "right"
+  },
+  assistantTimestamp: {
+    textAlign: "left"
   }
 });

@@ -43,6 +43,12 @@ export type ChatSession = {
   id: string;
   title: string;
   updatedAt: string;
+  lessonNumber: number;
+};
+
+export type SessionSummary = {
+  conversationId: string;
+  report: string;
 };
 
 export type LessonSummary = {
@@ -96,12 +102,23 @@ type BackendConversation = {
   updated_at: string;
 };
 
+type BackendCompletedConversation = BackendConversation & {
+  lesson_number: number;
+};
+
+type BackendConversationLike = BackendConversation | BackendCompletedConversation;
+
 type BackendMessage = {
   id: string;
   conversation_id: string;
   role: "user" | "assistant";
   content: string;
   created_at: string;
+};
+
+type BackendSessionSummary = {
+  conversation_id: string;
+  report: string;
 };
 
 type BackendLessonSummary = {
@@ -152,9 +169,30 @@ export function logout() {
   forceNewConversation = false;
 }
 
-export function endConversation() {
+function markConversationEndedLocally() {
   activeConversationId = null;
   forceNewConversation = true;
+}
+
+export async function endConversation(): Promise<SessionSummary | null> {
+  const conversationId = await getActiveConversationId(false);
+
+  if (!conversationId) {
+    markConversationEndedLocally();
+    return null;
+  }
+
+  const summary = await request<BackendSessionSummary>(
+    `/conversations/${conversationId}/end-session`,
+    {
+      method: "POST"
+    }
+  );
+  markConversationEndedLocally();
+  return {
+    conversationId: summary.conversation_id,
+    report: summary.report
+  };
 }
 
 export function resetClientStateForTests() {
@@ -174,7 +212,17 @@ function mapConversation(conversation: BackendConversation): ChatSession {
   return {
     id: conversation.id,
     title: conversation.title,
-    updatedAt: conversation.updated_at
+    updatedAt: conversation.updated_at,
+    lessonNumber: 1
+  };
+}
+
+function mapCompletedConversation(conversation: BackendCompletedConversation): ChatSession {
+  return {
+    id: conversation.id,
+    title: conversation.title,
+    updatedAt: conversation.updated_at,
+    lessonNumber: conversation.lesson_number || 1
   };
 }
 
@@ -259,6 +307,26 @@ function mapLessonDetail(lesson: BackendLessonDetail): LessonDetail {
   };
 }
 
+function parseConversationSequenceId(conversationId: string): number {
+  const [, rawId] = conversationId.split("-", 2);
+  const parsed = Number.parseInt(rawId ?? "", 10);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function compareConversationsBySessionOrder(
+  first: BackendConversationLike,
+  second: BackendConversationLike
+): number {
+  const firstCreatedAt = new Date(first.created_at).getTime();
+  const secondCreatedAt = new Date(second.created_at).getTime();
+
+  if (firstCreatedAt !== secondCreatedAt) {
+    return firstCreatedAt - secondCreatedAt;
+  }
+
+  return parseConversationSequenceId(first.id) - parseConversationSequenceId(second.id);
+}
+
 function ensureAuthenticated() {
   if (!accessToken) {
     throw new Error("Please log in to continue");
@@ -310,6 +378,11 @@ async function readErrorMessage(response: Response) {
 async function listConversations(): Promise<BackendConversation[]> {
   ensureAuthenticated();
   return request<BackendConversation[]>("/conversations");
+}
+
+async function listCompletedConversations(): Promise<BackendCompletedConversation[]> {
+  ensureAuthenticated();
+  return request<BackendCompletedConversation[]>("/conversations/completed");
 }
 
 async function getActiveConversationId(createIfMissing: boolean): Promise<string | null> {
@@ -432,9 +505,34 @@ export async function sendMessage(text: string): Promise<ChatMessage[]> {
   return messages.map(mapMessage);
 }
 
+export async function fetchCurrentSessionNumber(): Promise<number> {
+  ensureAuthenticated();
+  const [activeConversations, completedConversations] = await Promise.all([
+    listConversations(),
+    listCompletedConversations()
+  ]);
+  const activeConversationId = await getActiveConversationId(false);
+  const orderedConversations = [...activeConversations, ...completedConversations].sort(
+    compareConversationsBySessionOrder
+  );
+
+  if (!orderedConversations.length) {
+    return 1;
+  }
+
+  if (!activeConversationId) {
+    return orderedConversations.length + 1;
+  }
+
+  const activeSessionIndex = orderedConversations.findIndex(
+    (conversation) => conversation.id === activeConversationId
+  );
+  return activeSessionIndex >= 0 ? activeSessionIndex + 1 : orderedConversations.length + 1;
+}
+
 export async function fetchChatHistory(): Promise<ChatSession[]> {
-  const conversations = await listConversations();
-  return conversations.map(mapConversation);
+  const conversations = await listCompletedConversations();
+  return conversations.map(mapCompletedConversation);
 }
 
 export async function fetchConversationHistory(conversationId: string): Promise<ChatMessage[]> {
@@ -443,6 +541,24 @@ export async function fetchConversationHistory(conversationId: string): Promise<
     `/conversations/${conversationId}/history`
   );
   return messages.map(mapMessage);
+}
+
+export async function hasActiveConversation(): Promise<boolean> {
+  const conversations = await listConversations();
+  return conversations.length > 0;
+}
+
+export async function fetchConversationSummary(
+  conversationId: string
+): Promise<SessionSummary> {
+  ensureAuthenticated();
+  const response = await request<BackendSessionSummary>(
+    `/conversations/${conversationId}/session-summary`
+  );
+  return {
+    conversationId: response.conversation_id,
+    report: response.report
+  };
 }
 
 export async function fetchLessons(): Promise<LessonSummary[]> {

@@ -9,12 +9,14 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from app.assistant_agent import (
     build_assistant_memory,
     build_extractor_agent,
+    build_generator_agent,
     generate_assistant_reply,
 )
 from app.auth import create_access_token, hash_password, verify_access_token, verify_password
 from app.config import Settings, get_settings
 from app.schemas import (
     CoachStateResponse,
+    CompletedConversation,
     Conversation,
     ConversationCreate,
     HealthProfile,
@@ -26,10 +28,16 @@ from app.schemas import (
     Message,
     MessageCreate,
     RegisterRequest,
+    SessionSummaryResponse,
     SessionReportsResponse,
     TutorialStatusResponse,
 )
-from app.services.chatbox.state_tracker import apply_delta_text, state_to_text
+from app.services.chatbox.chat_prompts import COACH_SYSTEM_PROMPT_1ST_SESSION
+from app.services.chatbox.state_tracker import (
+    apply_delta_text,
+    build_initial_cst,
+    state_to_text,
+)
 from app.store import build_store
 
 settings = get_settings()
@@ -44,6 +52,15 @@ app.add_middleware(
 router = APIRouter(prefix=settings.api_prefix)
 store = build_store(settings)
 bearer_scheme = HTTPBearer(auto_error=False)
+
+
+def _api_debug(event: str, **payload: object) -> None:
+    if not settings.assistant_debug_logging:
+        return
+    print(
+        f"[API DEBUG] {event} | {json.dumps(payload, ensure_ascii=False, default=str)}",
+        flush=True,
+    )
 
 
 def _auth_error() -> HTTPException:
@@ -90,6 +107,108 @@ def _auth_locked_error(remaining_seconds: int | None = None) -> HTTPException:
     return HTTPException(
         status_code=status.HTTP_429_TOO_MANY_REQUESTS,
         detail=detail,
+    )
+
+
+def _current_lesson_number(user_id: int) -> int:
+    lessons = store.list_lessons(user_id=user_id)
+    in_progress = next((lesson for lesson in lessons if lesson.status == "in_progress"), None)
+    if in_progress is not None:
+        return int(in_progress.week)
+    completed_weeks = [int(lesson.week) for lesson in lessons if lesson.status == "completed"]
+    return max(completed_weeks) if completed_weeks else 1
+
+
+def _conversation_order_key(
+    conversation: Conversation | CompletedConversation,
+) -> tuple[datetime, int]:
+    _, _, raw_id = conversation.id.partition("-")
+    try:
+        internal_id = int(raw_id)
+    except ValueError:
+        internal_id = 0
+    return (conversation.created_at, internal_id)
+
+
+def _list_user_conversations_ordered(
+    user_id: int,
+) -> list[Conversation | CompletedConversation]:
+    all_conversations: list[Conversation | CompletedConversation] = [
+        *store.list_conversations(user_id=user_id),
+        *store.list_completed_conversations(user_id=user_id),
+    ]
+    return sorted(all_conversations, key=_conversation_order_key)
+
+
+def _session_index_for_conversation(conversation_id: str, user_id: int) -> int:
+    ordered_conversations = _list_user_conversations_ordered(user_id)
+    for index, conversation in enumerate(ordered_conversations, start=1):
+        if conversation.id == conversation_id:
+            return index
+    return max(1, len(ordered_conversations))
+
+
+def _is_first_turn_of_session(history: list[Message]) -> bool:
+    user_turn_count = sum(1 for message in history if message.role == "user")
+    assistant_turn_count = sum(1 for message in history if message.role == "assistant")
+    return user_turn_count == 1 and assistant_turn_count == 0
+
+
+def _is_first_turn_first_session(
+    *,
+    conversation_id: str,
+    history: list[Message],
+    user_id: int,
+) -> bool:
+    if not _is_first_turn_of_session(history):
+        return False
+
+    ordered_conversations = _list_user_conversations_ordered(user_id)
+    if not ordered_conversations:
+        return False
+
+    first_conversation = ordered_conversations[0]
+    return first_conversation.id == conversation_id
+
+
+def _build_previous_session_reports_text(user_id: int, conversation_id: str) -> str:
+    current_session_index = _session_index_for_conversation(conversation_id, user_id)
+    ordered_conversations = _list_user_conversations_ordered(user_id)
+    session_reports: list[str] = []
+
+    for session_index, conversation in enumerate(ordered_conversations, start=1):
+        if session_index >= current_session_index:
+            break
+        report_text = store.get_latest_session_report(
+            conversation.id, user_id=user_id
+        ).strip()
+        if not report_text:
+            continue
+        session_reports.append(
+            f"Summarized report for session {session_index}:\n{report_text}"
+        )
+
+    return "\n\n".join(session_reports)
+
+
+def _format_history_text(conversation_messages: list[Message]) -> str:
+    lines: list[str] = []
+    for message in conversation_messages:
+        if message.role == "user":
+            lines.append(f"User: {message.content.strip()}")
+        elif message.role == "assistant":
+            lines.append(f"Assistant: {message.content.strip()}")
+    return "\n".join(lines).strip()
+
+
+def _build_generator_meta_text(current_account: dict, session_index: int) -> str:
+    user_name = str(current_account.get("name") or current_account.get("email") or "")
+    health_profile = store.get_health_profile_for_auth_user(int(current_account["id"]))
+    profile_text = json.dumps(health_profile, ensure_ascii=False, indent=2)
+    return (
+        f"User name: {user_name}\n"
+        f"Current session: session_{session_index}\n"
+        f"User health profile (JSON):\n{profile_text}"
     )
 
 
@@ -312,6 +431,13 @@ def list_conversations(
     return store.list_conversations(user_id=int(current_account["user_id"]))
 
 
+@router.get("/conversations/completed", response_model=list[CompletedConversation])
+def list_completed_conversations(
+    current_account: dict = Depends(get_current_account),
+) -> list[CompletedConversation]:
+    return store.list_completed_conversations(user_id=int(current_account["user_id"]))
+
+
 @router.post(
     "/conversations/{conversation_id}/messages",
     response_model=Message,
@@ -325,6 +451,11 @@ def submit_message(
     user_id = int(current_account["user_id"])
     if not store.has_conversation(conversation_id, user_id=user_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    if store.is_conversation_ended(conversation_id, user_id=user_id):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Session already ended. Start a new conversation.",
+        )
     return store.add_message(
         conversation_id=conversation_id,
         role=payload.role,
@@ -385,6 +516,79 @@ def get_session_reports(
     )
 
 
+@router.get(
+    "/conversations/{conversation_id}/session-summary",
+    response_model=SessionSummaryResponse,
+)
+def get_session_summary(
+    conversation_id: str, current_account: dict = Depends(get_current_account)
+) -> SessionSummaryResponse:
+    user_id = int(current_account["user_id"])
+    if not store.has_conversation(conversation_id, user_id=user_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    report = store.get_latest_session_report(conversation_id, user_id=user_id)
+    if not report:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Session summary is not available yet.",
+        )
+    return SessionSummaryResponse(conversation_id=conversation_id, report=report)
+
+
+@router.post(
+    "/conversations/{conversation_id}/end-session",
+    response_model=SessionSummaryResponse,
+)
+def end_session(
+    conversation_id: str, current_account: dict = Depends(get_current_account)
+) -> SessionSummaryResponse:
+    user_id = int(current_account["user_id"])
+    _api_debug(
+        "end_session.start",
+        user_id=user_id,
+        conversation_id=conversation_id,
+    )
+    if not store.has_conversation(conversation_id, user_id=user_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+
+    existing_report = store.get_latest_session_report(conversation_id, user_id=user_id)
+    if existing_report:
+        _api_debug(
+            "end_session.reuse_existing_report",
+            user_id=user_id,
+            conversation_id=conversation_id,
+        )
+        return SessionSummaryResponse(
+            conversation_id=conversation_id,
+            report=existing_report,
+        )
+
+    extractor = build_extractor_agent()
+    report = extractor.generate_session_report(
+        [
+            {
+                "role": message.role,
+                "content": message.content,
+            }
+            for message in store.get_messages(conversation_id, user_id=user_id)
+        ],
+        session_label=conversation_id,
+    )
+    store.add_session_report(
+        conversation_id,
+        report,
+        user_id=user_id,
+        lesson_number=_current_lesson_number(user_id),
+    )
+    _api_debug(
+        "end_session.generated_report",
+        user_id=user_id,
+        conversation_id=conversation_id,
+        report=report,
+    )
+    return SessionSummaryResponse(conversation_id=conversation_id, report=report)
+
+
 @router.post(
     "/conversations/{conversation_id}/assistant-reply",
     response_model=Message,
@@ -394,10 +598,21 @@ def create_assistant_reply(
     conversation_id: str, current_account: dict = Depends(get_current_account)
 ) -> Message:
     user_id = int(current_account["user_id"])
+    _api_debug(
+        "assistant_reply.start",
+        user_id=user_id,
+        conversation_id=conversation_id,
+    )
     if not store.has_conversation(conversation_id, user_id=user_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    if store.is_conversation_ended(conversation_id, user_id=user_id):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Session already ended. Start a new conversation.",
+        )
 
     history = store.get_messages(conversation_id, user_id=user_id)
+    session_index = _session_index_for_conversation(conversation_id, user_id)
     latest_user_message = next(
         (message for message in reversed(history) if message.role == "user"),
         None,
@@ -412,37 +627,111 @@ def create_assistant_reply(
         previous_assistant_message.content if previous_assistant_message else None,
         latest_user_message.content if latest_user_message else "",
     )
-    updated_coach_state = apply_delta_text(
-        store.get_coach_state(conversation_id, user_id=user_id),
-        delta_text,
+    _api_debug(
+        "assistant_reply.extractor_done",
+        conversation_id=conversation_id,
+        session_index=session_index,
+        latest_user_message=(latest_user_message.content if latest_user_message else ""),
+        previous_assistant_message=(
+            previous_assistant_message.content if previous_assistant_message else ""
+        ),
+        delta_text=delta_text,
     )
+
+    session_timestamp = f"{date.today().isoformat()}_session{session_index}"
+    current_coach_state = store.get_coach_state(conversation_id, user_id=user_id)
+    if current_coach_state:
+        current_coach_state.setdefault("session", {})
+        current_coach_state["session"]["session_timestamp"] = session_timestamp
+    else:
+        current_coach_state = build_initial_cst(
+            session_timestamp, session_num=session_index
+        )
+
+    updated_coach_state = apply_delta_text(
+        current_coach_state,
+        delta_text,
+        session_num=session_index,
+    )
+    updated_coach_state["session"]["session_timestamp"] = session_timestamp
     store.save_coach_state(conversation_id, updated_coach_state, user_id=user_id)
+    _api_debug(
+        "assistant_reply.cst_saved",
+        conversation_id=conversation_id,
+        session_index=session_index,
+        cst=updated_coach_state,
+    )
 
     memory_text = build_assistant_memory(
-        latest_session_report=store.get_latest_session_report(
-            conversation_id, user_id=user_id
+        previous_session_reports_text=_build_previous_session_reports_text(
+            user_id, conversation_id
         ),
         coach_state_text=state_to_text(updated_coach_state),
     )
+    _api_debug(
+        "assistant_reply.memory_built",
+        conversation_id=conversation_id,
+        session_index=session_index,
+        memory_text=memory_text,
+    )
 
-    reply = generate_assistant_reply(history, memory_text=memory_text)
+    prompt_patch: str | None = None
+    if not _is_first_turn_of_session(history):
+        generator = build_generator_agent()
+        prompt_patch = generator.generate_prompt_patch(
+            updated_coach_state,
+            chat_history_text=_format_history_text(history),
+            meta_text=_build_generator_meta_text(current_account, session_index),
+        )
+    _api_debug(
+        "assistant_reply.patch_decision",
+        conversation_id=conversation_id,
+        session_index=session_index,
+        is_first_turn_of_session=_is_first_turn_of_session(history),
+        prompt_patch=prompt_patch,
+    )
+
+    if _is_first_turn_first_session(
+        conversation_id=conversation_id,
+        history=history,
+        user_id=user_id,
+    ):
+        reply = generate_assistant_reply(
+            history,
+            memory_text=memory_text,
+            base_prompt=COACH_SYSTEM_PROMPT_1ST_SESSION,
+            include_fewshot=False,
+        )
+        _api_debug(
+            "assistant_reply.first_session_first_turn_prompt",
+            conversation_id=conversation_id,
+            session_index=session_index,
+            base_prompt="COACH_SYSTEM_PROMPT_1ST_SESSION",
+        )
+    else:
+        reply = generate_assistant_reply(
+            history,
+            memory_text=memory_text,
+            prompt_patch=prompt_patch,
+        )
+        _api_debug(
+            "assistant_reply.default_prompt_path",
+            conversation_id=conversation_id,
+            session_index=session_index,
+            prompt_patch=prompt_patch,
+        )
     created_reply = store.add_message(
         conversation_id=conversation_id,
         role="assistant",
         content=reply,
         user_id=user_id,
     )
-    report = extractor.generate_session_report(
-        [
-            {
-                "role": message.role,
-                "content": message.content,
-            }
-            for message in store.get_messages(conversation_id, user_id=user_id)
-        ],
-        session_label=conversation_id,
+    _api_debug(
+        "assistant_reply.completed",
+        conversation_id=conversation_id,
+        session_index=session_index,
+        reply=reply,
     )
-    store.add_session_report(conversation_id, report, user_id=user_id)
     return created_reply
 
 
