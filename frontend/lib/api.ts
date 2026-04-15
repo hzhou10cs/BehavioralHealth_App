@@ -1,0 +1,598 @@
+export type LoginRequest = {
+  email: string;
+  password: string;
+};
+
+export type HealthProfile = {
+  firstName: string;
+  lastName: string;
+  gender: string;
+  occupation: string;
+  phone: string;
+  email: string;
+  height: string;
+  initialWeight: string;
+  bodyMeasurements: string;
+  weightStatement: string;
+  allergy: string;
+  medication: string;
+  lifestyle: string;
+  medicalHistory: string;
+  registerDate: string;
+};
+
+export type RegisterRequest = LoginRequest & {
+  name: string;
+  healthProfile?: HealthProfile;
+};
+
+export type LoginResponse = {
+  accessToken: string;
+  userName: string;
+  tutorialRequired: boolean;
+};
+
+export type ChatMessage = {
+  id: string;
+  role: "user" | "assistant";
+  text: string;
+  createdAt: string;
+};
+
+export type ChatSession = {
+  id: string;
+  title: string;
+  updatedAt: string;
+  lessonNumber: number;
+};
+
+export type SessionSummary = {
+  conversationId: string;
+  report: string;
+};
+
+export type LessonSummary = {
+  id: string;
+  week: number;
+  slug: string;
+  title: string;
+  phase: string;
+  summary: string;
+  status: string;
+};
+
+export type LessonSection = {
+  type: string;
+  title: string;
+  content?: string;
+  items: string[];
+};
+
+export type LessonActivityField = {
+  id: string;
+  label: string;
+  kind: string;
+  placeholder?: string;
+};
+
+export type LessonActivity = {
+  type: string;
+  title: string;
+  prompt: string;
+  fields: LessonActivityField[];
+};
+
+export type LessonDetail = LessonSummary & {
+  objectives: string[];
+  sections: LessonSection[];
+  activity?: LessonActivity | null;
+};
+
+type BackendLoginResponse = {
+  access_token: string;
+  token_type: string;
+  user_name: string;
+  tutorial_required?: boolean;
+};
+
+type BackendConversation = {
+  id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+};
+
+type BackendCompletedConversation = BackendConversation & {
+  lesson_number: number;
+};
+
+type BackendConversationLike = BackendConversation | BackendCompletedConversation;
+
+type BackendMessage = {
+  id: string;
+  conversation_id: string;
+  role: "user" | "assistant";
+  content: string;
+  created_at: string;
+};
+
+type BackendSessionSummary = {
+  conversation_id: string;
+  report: string;
+};
+
+type BackendLessonSummary = {
+  id: string;
+  week: number;
+  slug: string;
+  title: string;
+  phase: string;
+  summary: string;
+  status: string;
+};
+
+
+type BackendHealthProfile = {
+  first_name: string;
+  last_name: string;
+  gender: string;
+  occupation: string;
+  phone: string;
+  email: string;
+  height: string;
+  initial_weight: string;
+  body_measurements: string;
+  weight_statement: string;
+  allergy: string;
+  medication: string;
+  lifestyle: string;
+  medical_history: string;
+  register_date: string;
+};
+type BackendLessonDetail = BackendLessonSummary & {
+  objectives: string[];
+  sections: LessonSection[];
+  activity?: LessonActivity | null;
+};
+
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
+
+let accessToken: string | null = null;
+let activeConversationId: string | null = null;
+let currentUserName = "";
+let forceNewConversation = false;
+
+export function logout() {
+  accessToken = null;
+  activeConversationId = null;
+  currentUserName = "";
+  forceNewConversation = false;
+}
+
+function markConversationEndedLocally() {
+  activeConversationId = null;
+  forceNewConversation = true;
+}
+
+export async function endConversation(): Promise<SessionSummary | null> {
+  const conversationId = await getActiveConversationId(false);
+
+  if (!conversationId) {
+    markConversationEndedLocally();
+    return null;
+  }
+
+  const summary = await request<BackendSessionSummary>(
+    `/conversations/${conversationId}/end-session`,
+    {
+      method: "POST"
+    }
+  );
+  markConversationEndedLocally();
+  return {
+    conversationId: summary.conversation_id,
+    report: summary.report
+  };
+}
+
+export function resetClientStateForTests() {
+  logout();
+}
+
+function mapMessage(message: BackendMessage): ChatMessage {
+  return {
+    id: message.id,
+    role: message.role,
+    text: message.content,
+    createdAt: message.created_at
+  };
+}
+
+function mapConversation(conversation: BackendConversation): ChatSession {
+  return {
+    id: conversation.id,
+    title: conversation.title,
+    updatedAt: conversation.updated_at,
+    lessonNumber: 1
+  };
+}
+
+function mapCompletedConversation(conversation: BackendCompletedConversation): ChatSession {
+  return {
+    id: conversation.id,
+    title: conversation.title,
+    updatedAt: conversation.updated_at,
+    lessonNumber: conversation.lesson_number || 1
+  };
+}
+
+function mapLessonSummary(lesson: BackendLessonSummary): LessonSummary {
+  return {
+    id: lesson.id,
+    week: lesson.week,
+    slug: lesson.slug,
+    title: lesson.title,
+    phase: lesson.phase,
+    summary: lesson.summary,
+    status: lesson.status
+  };
+}
+
+
+function mapHealthProfile(profile: BackendHealthProfile): HealthProfile {
+  return {
+    firstName: profile.first_name ?? "",
+    lastName: profile.last_name ?? "",
+    gender: profile.gender ?? "",
+    occupation: profile.occupation ?? "",
+    phone: profile.phone ?? "",
+    email: profile.email ?? "",
+    height: profile.height ?? "",
+    initialWeight: profile.initial_weight ?? "",
+    bodyMeasurements: profile.body_measurements ?? "",
+    weightStatement: profile.weight_statement ?? "",
+    allergy: profile.allergy ?? "N/A",
+    medication: profile.medication ?? "N/A",
+    lifestyle: profile.lifestyle ?? "N/A",
+    medicalHistory: profile.medical_history ?? "N/A",
+    registerDate: profile.register_date ?? ""
+  };
+}
+
+function toBackendHealthProfile(profile: HealthProfile): BackendHealthProfile {
+  return {
+    first_name: profile.firstName,
+    last_name: profile.lastName,
+    gender: profile.gender,
+    occupation: profile.occupation,
+    phone: profile.phone,
+    email: profile.email,
+    height: profile.height,
+    initial_weight: profile.initialWeight,
+    body_measurements: profile.bodyMeasurements,
+    weight_statement: profile.weightStatement,
+    allergy: profile.allergy,
+    medication: profile.medication,
+    lifestyle: profile.lifestyle,
+    medical_history: profile.medicalHistory,
+    register_date: profile.registerDate
+  };
+}
+
+function defaultHealthProfile(email = ""): HealthProfile {
+  return {
+    firstName: "",
+    lastName: "",
+    gender: "",
+    occupation: "",
+    phone: "",
+    email,
+    height: "",
+    initialWeight: "",
+    bodyMeasurements: "",
+    weightStatement: "",
+    allergy: "N/A",
+    medication: "N/A",
+    lifestyle: "N/A",
+    medicalHistory: "N/A",
+    registerDate: ""
+  };
+}
+function mapLessonDetail(lesson: BackendLessonDetail): LessonDetail {
+  return {
+    ...mapLessonSummary(lesson),
+    objectives: lesson.objectives,
+    sections: lesson.sections,
+    activity: lesson.activity ?? null
+  };
+}
+
+function parseConversationSequenceId(conversationId: string): number {
+  const [, rawId] = conversationId.split("-", 2);
+  const parsed = Number.parseInt(rawId ?? "", 10);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function compareConversationsBySessionOrder(
+  first: BackendConversationLike,
+  second: BackendConversationLike
+): number {
+  const firstCreatedAt = new Date(first.created_at).getTime();
+  const secondCreatedAt = new Date(second.created_at).getTime();
+
+  if (firstCreatedAt !== secondCreatedAt) {
+    return firstCreatedAt - secondCreatedAt;
+  }
+
+  return parseConversationSequenceId(first.id) - parseConversationSequenceId(second.id);
+}
+
+function ensureAuthenticated() {
+  if (!accessToken) {
+    throw new Error("Please log in to continue");
+  }
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers = new Headers(init?.headers);
+
+  if (!headers.has("Content-Type") && init?.body) {
+    headers.set("Content-Type", "application/json");
+  }
+
+  if (accessToken && !headers.has("Authorization")) {
+    headers.set("Authorization", `Bearer ${accessToken}`);
+  }
+
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    ...init,
+    headers
+  });
+
+  if (!response.ok) {
+    const message = await readErrorMessage(response);
+    throw new Error(message);
+  }
+
+  return (await response.json()) as T;
+}
+
+async function readErrorMessage(response: Response) {
+  try {
+    const body = (await response.json()) as { detail?: string | { msg?: string }[] };
+
+    if (typeof body.detail === "string") {
+      return body.detail;
+    }
+
+    if (Array.isArray(body.detail) && body.detail.length > 0) {
+      return body.detail[0]?.msg ?? `Request failed with status ${response.status}`;
+    }
+  } catch {
+    return `Request failed with status ${response.status}`;
+  }
+
+  return `Request failed with status ${response.status}`;
+}
+
+async function listConversations(): Promise<BackendConversation[]> {
+  ensureAuthenticated();
+  return request<BackendConversation[]>("/conversations");
+}
+
+async function listCompletedConversations(): Promise<BackendCompletedConversation[]> {
+  ensureAuthenticated();
+  return request<BackendCompletedConversation[]>("/conversations/completed");
+}
+
+async function getActiveConversationId(createIfMissing: boolean): Promise<string | null> {
+  if (activeConversationId && !forceNewConversation) {
+    return activeConversationId;
+  }
+
+  if (!forceNewConversation) {
+    const conversations = await listConversations();
+    const latestConversation = conversations[conversations.length - 1];
+
+    if (latestConversation) {
+      activeConversationId = latestConversation.id;
+      return activeConversationId;
+    }
+  }
+
+  if (!createIfMissing) {
+    return null;
+  }
+
+  forceNewConversation = false;
+  const title = currentUserName ? `${currentUserName}'s Session` : "Therapy Session";
+  const created = await request<BackendConversation>("/conversations", {
+    method: "POST",
+    body: JSON.stringify({ title })
+  });
+
+  activeConversationId = created.id;
+  return activeConversationId;
+}
+
+export async function login({ email, password }: LoginRequest): Promise<LoginResponse> {
+  activeConversationId = null;
+
+  const response = await request<BackendLoginResponse>("/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ email, password })
+  });
+
+  accessToken = response.access_token;
+  currentUserName = response.user_name;
+
+  return {
+    accessToken: response.access_token,
+    userName: response.user_name,
+    tutorialRequired: response.tutorial_required ?? false
+  };
+}
+
+export async function register({
+  email,
+  password,
+  name,
+  healthProfile
+}: RegisterRequest): Promise<LoginResponse> {
+  activeConversationId = null;
+
+  const response = await request<BackendLoginResponse>("/auth/register", {
+    method: "POST",
+    body: JSON.stringify({
+      email,
+      password,
+      name,
+      health_profile: toBackendHealthProfile(healthProfile ?? defaultHealthProfile(email))
+    })
+  });
+
+  accessToken = response.access_token;
+  currentUserName = response.user_name;
+
+  return {
+    accessToken: response.access_token,
+    userName: response.user_name,
+    tutorialRequired: response.tutorial_required ?? false
+  };
+}
+
+export async function completeTutorial(): Promise<void> {
+  ensureAuthenticated();
+  await request<{ tutorial_required: boolean }>("/auth/tutorial/complete", {
+    method: "POST"
+  });
+}
+
+export async function fetchMessages(): Promise<ChatMessage[]> {
+  const conversationId = await getActiveConversationId(false);
+
+  if (!conversationId) {
+    return [];
+  }
+
+  const messages = await request<BackendMessage[]>(
+    `/conversations/${conversationId}/messages`
+  );
+
+  return messages.map(mapMessage);
+}
+
+export async function sendMessage(text: string): Promise<ChatMessage[]> {
+  const conversationId = await getActiveConversationId(true);
+
+  if (!conversationId) {
+    throw new Error("Conversation could not be created");
+  }
+
+  await request<BackendMessage>(`/conversations/${conversationId}/messages`, {
+    method: "POST",
+    body: JSON.stringify({ role: "user", content: text })
+  });
+
+  await request<BackendMessage>(`/conversations/${conversationId}/assistant-reply`, {
+    method: "POST"
+  });
+
+  const messages = await request<BackendMessage[]>(
+    `/conversations/${conversationId}/history`
+  );
+
+  return messages.map(mapMessage);
+}
+
+export async function fetchCurrentSessionNumber(): Promise<number> {
+  ensureAuthenticated();
+  const [activeConversations, completedConversations] = await Promise.all([
+    listConversations(),
+    listCompletedConversations()
+  ]);
+  const activeConversationId = await getActiveConversationId(false);
+  const orderedConversations = [...activeConversations, ...completedConversations].sort(
+    compareConversationsBySessionOrder
+  );
+
+  if (!orderedConversations.length) {
+    return 1;
+  }
+
+  if (!activeConversationId) {
+    return orderedConversations.length + 1;
+  }
+
+  const activeSessionIndex = orderedConversations.findIndex(
+    (conversation) => conversation.id === activeConversationId
+  );
+  return activeSessionIndex >= 0 ? activeSessionIndex + 1 : orderedConversations.length + 1;
+}
+
+export async function fetchChatHistory(): Promise<ChatSession[]> {
+  const conversations = await listCompletedConversations();
+  return conversations.map(mapCompletedConversation);
+}
+
+export async function fetchConversationHistory(conversationId: string): Promise<ChatMessage[]> {
+  ensureAuthenticated();
+  const messages = await request<BackendMessage[]>(
+    `/conversations/${conversationId}/history`
+  );
+  return messages.map(mapMessage);
+}
+
+export async function hasActiveConversation(): Promise<boolean> {
+  const conversations = await listConversations();
+  return conversations.length > 0;
+}
+
+export async function fetchConversationSummary(
+  conversationId: string
+): Promise<SessionSummary> {
+  ensureAuthenticated();
+  const response = await request<BackendSessionSummary>(
+    `/conversations/${conversationId}/session-summary`
+  );
+  return {
+    conversationId: response.conversation_id,
+    report: response.report
+  };
+}
+
+export async function fetchLessons(): Promise<LessonSummary[]> {
+  ensureAuthenticated();
+  const lessons = await request<BackendLessonSummary[]>("/lessons");
+  return lessons.map(mapLessonSummary);
+}
+
+export async function fetchLesson(lessonId: string): Promise<LessonDetail> {
+  ensureAuthenticated();
+  const lesson = await request<BackendLessonDetail>(`/lessons/${lessonId}`);
+  return mapLessonDetail(lesson);
+}
+
+export async function completeLesson(lessonId: string): Promise<LessonDetail> {
+  ensureAuthenticated();
+  const lesson = await request<BackendLessonDetail>(`/lessons/${lessonId}/complete`, {
+    method: "POST"
+  });
+  return mapLessonDetail(lesson);
+}
+
+export async function fetchHealthProfile(): Promise<HealthProfile> {
+  ensureAuthenticated();
+  const response = await request<{ profile: BackendHealthProfile }>("/auth/profile");
+  return mapHealthProfile(response.profile);
+}
+
+export async function updateHealthProfile(profile: HealthProfile): Promise<HealthProfile> {
+  ensureAuthenticated();
+  const response = await request<{ profile: BackendHealthProfile }>("/auth/profile", {
+    method: "PUT",
+    body: JSON.stringify(toBackendHealthProfile(profile))
+  });
+  return mapHealthProfile(response.profile);
+}
+
