@@ -34,29 +34,31 @@ export default function ChatRoute() {
   useEffect(() => {
     let mounted = true;
 
-    fetchMessages()
-      .then((data) => {
+    async function loadChat() {
+      try {
+        const data = await fetchMessages();
         if (!mounted) return;
         setMessages(data);
         setSessionSummary("");
         setSessionEnded(false);
         setIsWaitingResponse(false);
         setStatus("");
-      })
-      .catch(() => {
+      } catch {
         if (!mounted) return;
         setStatus("Could not load messages");
-      });
+      }
 
-    fetchCurrentSessionNumber()
-      .then((currentSessionNumber) => {
+      try {
+        const currentSessionNumber = await fetchCurrentSessionNumber();
         if (!mounted) return;
         setSessionNumber(currentSessionNumber);
-      })
-      .catch(() => {
+      } catch {
         if (!mounted) return;
         setSessionNumber(1);
-      });
+      }
+    }
+
+    void loadChat();
 
     return () => {
       mounted = false;

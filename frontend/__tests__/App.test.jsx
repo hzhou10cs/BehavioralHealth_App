@@ -112,6 +112,23 @@ describe("App integration", () => {
         );
       }
 
+      if (path === "/conversations/conv-1/messages" && method === "GET") {
+        return Promise.resolve(
+          createResponse({
+            json: [
+              {
+                id: "msg-greeting",
+                conversation_id: "conv-1",
+                role: "assistant",
+                content:
+                  "Hi, I'm David, your behavioral health coach. What brought you in today?",
+                created_at: "2026-03-24T18:00:01.000Z"
+              }
+            ]
+          })
+        );
+      }
+
       if (path === "/conversations/conv-1/messages" && method === "POST") {
         return Promise.resolve(
           createResponse({
@@ -146,6 +163,14 @@ describe("App integration", () => {
         return Promise.resolve(
           createResponse({
             json: [
+              {
+                id: "msg-greeting",
+                conversation_id: "conv-1",
+                role: "assistant",
+                content:
+                  "Hi, I'm David, your behavioral health coach. What brought you in today?",
+                created_at: "2026-03-24T18:00:01.000Z"
+              },
               {
                 id: "msg-1",
                 conversation_id: "conv-1",
@@ -245,6 +270,9 @@ describe("App integration", () => {
     await flushPromises();
 
     expect(getTextValues(root)).toContain("Active Chat (alex)");
+    expect(getTextValues(root)).toContain(
+      "Hi, I'm David, your behavioral health coach. What brought you in today?"
+    );
 
     await act(async () => {
       root.findByProps({ accessibilityLabel: "Message" }).props.onChangeText("I feel overwhelmed.");

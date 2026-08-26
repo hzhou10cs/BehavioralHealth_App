@@ -469,7 +469,7 @@ export async function completeTutorial(): Promise<void> {
 }
 
 export async function fetchMessages(): Promise<ChatMessage[]> {
-  const conversationId = await getActiveConversationId(false);
+  const conversationId = await getActiveConversationId(true);
 
   if (!conversationId) {
     return [];
@@ -507,10 +507,8 @@ export async function sendMessage(text: string): Promise<ChatMessage[]> {
 
 export async function fetchCurrentSessionNumber(): Promise<number> {
   ensureAuthenticated();
-  const [activeConversations, completedConversations] = await Promise.all([
-    listConversations(),
-    listCompletedConversations()
-  ]);
+  const activeConversations = await listConversations();
+  const completedConversations = await listCompletedConversations();
   const activeConversationId = await getActiveConversationId(false);
   const orderedConversations = [...activeConversations, ...completedConversations].sort(
     compareConversationsBySessionOrder

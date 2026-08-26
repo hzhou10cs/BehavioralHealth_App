@@ -265,6 +265,16 @@ def test_conversation_create_and_list_isolated_per_user(client):
     assert sam_listed.status_code == 200
     assert sam_listed.json() == []
 
+    history = client.get(
+        f"/conversations/{created['id']}/history", headers=alex_headers
+    )
+    assert history.status_code == 200
+    messages = history.json()
+    assert len(messages) == 1
+    assert messages[0]["role"] == "assistant"
+    assert "I'm David, your behavioral health coach" in messages[0]["content"]
+    assert messages[0]["content"].endswith("What brought you in today?")
+
 
 def test_lessons_are_seeded_and_available_per_user(client):
     auth = register_user(client, "alex@example.com")
@@ -367,8 +377,10 @@ def test_submit_message_and_retrieve_history(client):
     history = client.get(f"/conversations/{conversation_id}/history", headers=headers)
     assert history.status_code == 200
     items = history.json()
-    assert len(items) == 1
-    assert items[0]["id"] == submitted["id"]
+    assert len(items) == 2
+    assert items[0]["role"] == "assistant"
+    assert "What brought you in today?" in items[0]["content"]
+    assert items[1]["id"] == submitted["id"]
 
 
 def test_conversation_routes_hide_other_users_data(client):
@@ -422,7 +434,9 @@ def test_create_assistant_reply(client):
     history = client.get(f"/conversations/{conversation_id}/history", headers=headers)
     assert history.status_code == 200
     items = history.json()
-    assert len(items) == 2
+    assert len(items) == 3
+    assert items[0]["role"] == "assistant"
+    assert "What brought you in today?" in items[0]["content"]
     assert items[-1]["role"] == "assistant"
 
     auth_user_id = auth_user_id_for("alex@example.com")
@@ -876,8 +890,10 @@ def test_message_history_persists_after_store_restart(client):
     history = client.get(f"/conversations/{conversation_id}/history", headers=headers)
     assert history.status_code == 200
     items = history.json()
-    assert len(items) == 1
-    assert items[0]["content"] == "Please remember this after restart."
+    assert len(items) == 2
+    assert items[0]["role"] == "assistant"
+    assert "What brought you in today?" in items[0]["content"]
+    assert items[1]["content"] == "Please remember this after restart."
 
 
 def test_message_routes_return_404_for_unknown_conversation(client):

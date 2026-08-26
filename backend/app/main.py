@@ -32,7 +32,11 @@ from app.schemas import (
     SessionReportsResponse,
     TutorialStatusResponse,
 )
-from app.services.chatbox.chat_prompts import COACH_SYSTEM_PROMPT_1ST_SESSION
+from app.services.chatbox.chat_prompts import (
+    COACH_FIRST_SESSION_GREETING,
+    COACH_RETURNING_SESSION_GREETING,
+    COACH_SYSTEM_PROMPT_1ST_SESSION,
+)
 from app.services.chatbox.state_tracker import (
     apply_delta_text,
     build_initial_cst,
@@ -150,8 +154,18 @@ def _session_index_for_conversation(conversation_id: str, user_id: int) -> int:
 
 def _is_first_turn_of_session(history: list[Message]) -> bool:
     user_turn_count = sum(1 for message in history if message.role == "user")
-    assistant_turn_count = sum(1 for message in history if message.role == "assistant")
-    return user_turn_count == 1 and assistant_turn_count == 0
+    assistant_messages = [message for message in history if message.role == "assistant"]
+    has_only_initial_greeting = len(assistant_messages) == 1 and assistant_messages[0].content in {
+        COACH_FIRST_SESSION_GREETING,
+        COACH_RETURNING_SESSION_GREETING,
+    }
+    return user_turn_count == 1 and (not assistant_messages or has_only_initial_greeting)
+
+
+def _greeting_for_session(session_index: int) -> str:
+    if session_index == 1:
+        return COACH_FIRST_SESSION_GREETING
+    return COACH_RETURNING_SESSION_GREETING
 
 
 def _is_first_turn_first_session(
@@ -419,9 +433,25 @@ def complete_lesson(
 def create_conversation(
     payload: ConversationCreate, current_account: dict = Depends(get_current_account)
 ) -> Conversation:
-    return store.create_conversation(
-        title=payload.title, user_id=int(current_account["user_id"])
+    user_id = int(current_account["user_id"])
+    conversation = store.create_conversation(
+        title=payload.title, user_id=user_id
     )
+    session_index = _session_index_for_conversation(conversation.id, user_id)
+    greeting = _greeting_for_session(session_index)
+    store.add_message(
+        conversation_id=conversation.id,
+        role="assistant",
+        content=greeting,
+        user_id=user_id,
+    )
+    _api_debug(
+        "conversation.initial_greeting_created",
+        conversation_id=conversation.id,
+        session_index=session_index,
+        greeting=greeting,
+    )
+    return conversation
 
 
 @router.get("/conversations", response_model=list[Conversation])

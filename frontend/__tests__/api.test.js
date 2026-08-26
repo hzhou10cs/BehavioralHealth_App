@@ -333,6 +333,14 @@ describe("frontend api client", () => {
         createResponse({
           json: [
             {
+              id: "msg-greeting",
+              conversation_id: "conv-1",
+              role: "assistant",
+              content:
+                "Hi, I'm David, your behavioral health coach. What brought you in today?",
+              created_at: "2026-03-24T18:00:01.000Z"
+            },
+            {
               id: "msg-1",
               conversation_id: "conv-1",
               role: "user",
@@ -388,6 +396,12 @@ describe("frontend api client", () => {
       })
     );
     expect(result).toEqual([
+      {
+        id: "msg-greeting",
+        role: "assistant",
+        text: "Hi, I'm David, your behavioral health coach. What brought you in today?",
+        createdAt: "2026-03-24T18:00:01.000Z"
+      },
       {
         id: "msg-1",
         role: "user",
@@ -698,6 +712,61 @@ describe("frontend api client", () => {
     );
     expect(result.status).toBe("completed");
     expect(result.title).toBe("Welcome");
+  });
+
+  it("creates a new session and loads its coach greeting when none is active", async () => {
+    const fetchMock = global.fetch;
+
+    await loginWith(fetchMock);
+
+    fetchMock
+      .mockResolvedValueOnce(createResponse({ json: [] }))
+      .mockResolvedValueOnce(
+        createResponse({
+          status: 201,
+          json: {
+            id: "conv-8",
+            title: "alex's Session",
+            created_at: "2026-03-24T18:00:00.000Z",
+            updated_at: "2026-03-24T18:00:00.000Z"
+          }
+        })
+      )
+      .mockResolvedValueOnce(
+        createResponse({
+          json: [
+            {
+              id: "msg-greeting",
+              conversation_id: "conv-8",
+              role: "assistant",
+              content:
+                "Hi, I'm David, your behavioral health coach. What brought you in today?",
+              created_at: "2026-03-24T18:00:01.000Z"
+            }
+          ]
+        })
+      );
+
+    const result = await fetchMessages();
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      "http://127.0.0.1:8000/conversations",
+      expect.objectContaining({ method: "POST" })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      4,
+      "http://127.0.0.1:8000/conversations/conv-8/messages",
+      expect.objectContaining({ headers: expect.any(Headers) })
+    );
+    expect(result).toEqual([
+      {
+        id: "msg-greeting",
+        role: "assistant",
+        text: "Hi, I'm David, your behavioral health coach. What brought you in today?",
+        createdAt: "2026-03-24T18:00:01.000Z"
+      }
+    ]);
   });
 
   it("returns backend messages for the active conversation", async () => {
