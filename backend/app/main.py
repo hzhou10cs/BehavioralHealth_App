@@ -11,6 +11,7 @@ from app.assistant_agent import (
     build_extractor_agent,
     build_generator_agent,
     generate_assistant_reply,
+    generate_returning_session_greeting,
 )
 from app.auth import create_access_token, hash_password, verify_access_token, verify_password
 from app.config import Settings, get_settings
@@ -155,16 +156,21 @@ def _session_index_for_conversation(conversation_id: str, user_id: int) -> int:
 def _is_first_turn_of_session(history: list[Message]) -> bool:
     user_turn_count = sum(1 for message in history if message.role == "user")
     assistant_messages = [message for message in history if message.role == "assistant"]
-    has_only_initial_greeting = len(assistant_messages) == 1 and assistant_messages[0].content in {
-        COACH_FIRST_SESSION_GREETING,
-        COACH_RETURNING_SESSION_GREETING,
-    }
+    has_only_initial_greeting = len(assistant_messages) == 1
     return user_turn_count == 1 and (not assistant_messages or has_only_initial_greeting)
 
 
-def _greeting_for_session(session_index: int) -> str:
+def _greeting_for_session(
+    session_index: int, *, previous_session_reports_text: str = ""
+) -> str:
     if session_index == 1:
         return COACH_FIRST_SESSION_GREETING
+    if previous_session_reports_text.strip():
+        generated_greeting = generate_returning_session_greeting(
+            previous_session_reports_text
+        ).strip()
+        if generated_greeting and not generated_greeting.startswith("[LLM error]"):
+            return generated_greeting
     return COACH_RETURNING_SESSION_GREETING
 
 
@@ -438,7 +444,12 @@ def create_conversation(
         title=payload.title, user_id=user_id
     )
     session_index = _session_index_for_conversation(conversation.id, user_id)
-    greeting = _greeting_for_session(session_index)
+    greeting = _greeting_for_session(
+        session_index,
+        previous_session_reports_text=_build_previous_session_reports_text(
+            user_id, conversation.id
+        ),
+    )
     store.add_message(
         conversation_id=conversation.id,
         role="assistant",

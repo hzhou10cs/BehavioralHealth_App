@@ -205,3 +205,41 @@ class ChatboxChatAgent:
                 "[LLM error] Failed to get reply from the migrated chat service: "
                 f"{exc}"
             )
+
+    def reply_from_text(
+        self,
+        user_input: str,
+        *,
+        prompt_patch: str | None = None,
+        base_prompt: str | None = None,
+        memory_text: str | None = None,
+        include_fewshot: bool | None = None,
+    ) -> str:
+        """Generate a reply for a task that is not yet part of chat history."""
+        if self.config.test_mode:
+            return (
+                "Welcome back. I remember the plan from our last session. "
+                "What happened when you tried it?"
+            )
+
+        request_messages = self.build_messages_from_text(
+            user_input=user_input,
+            prompt_patch=prompt_patch,
+            base_prompt=base_prompt,
+            memory_text=memory_text,
+            include_fewshot=include_fewshot,
+        )
+        if self.config.debug_logging:
+            print(
+                f"[ChatAgent] request_messages={json.dumps(request_messages, ensure_ascii=False)}",
+                flush=True,
+            )
+        try:
+            return self.client.chat(request_messages)
+        except Exception as exc:
+            if self.config.debug_logging:
+                print(f"[ChatAgent] reply_error={exc}", flush=True)
+            return (
+                "[LLM error] Failed to get reply from the migrated chat service: "
+                f"{exc}"
+            )

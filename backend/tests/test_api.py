@@ -538,6 +538,76 @@ def test_first_turn_of_non_first_session_uses_default_prompt(client, monkeypatch
     assert captured["prompt_patch"] is None
 
 
+def test_returning_session_opens_with_previous_report_context(client, monkeypatch):
+    auth = register_user(client, "alex@example.com")
+    headers = auth_headers(auth["access_token"])
+    user_id = auth_user_id_for("alex@example.com")
+
+    first_conversation = client.post(
+        "/conversations",
+        json={"title": "Session One"},
+        headers=headers,
+    ).json()
+    main_module.store.add_session_report(
+        first_conversation["id"],
+        "The user planned a 10:45 PM wind-down and noted late work as a barrier.",
+        user_id=user_id,
+    )
+
+    captured: dict[str, str] = {}
+
+    def fake_generate_returning_session_greeting(previous_session_reports_text: str) -> str:
+        captured["reports"] = previous_session_reports_text
+        return (
+            "Welcome back. Last time you planned a 10:45 PM wind-down, with late "
+            "work as a possible barrier. How did that go?"
+        )
+
+    monkeypatch.setattr(
+        main_module,
+        "generate_returning_session_greeting",
+        fake_generate_returning_session_greeting,
+    )
+
+    second_conversation = client.post(
+        "/conversations",
+        json={"title": "Session Two"},
+        headers=headers,
+    ).json()
+    history = client.get(
+        f"/conversations/{second_conversation['id']}/history",
+        headers=headers,
+    ).json()
+
+    assert "10:45 PM wind-down" in captured["reports"]
+    assert history[0]["role"] == "assistant"
+    assert "10:45 PM wind-down" in history[0]["content"]
+
+    client.post(
+        f"/conversations/{second_conversation['id']}/messages",
+        json={"role": "user", "content": "I managed it on two nights."},
+        headers=headers,
+    )
+    assert main_module._is_first_turn_of_session(
+        main_module.store.get_messages(second_conversation["id"], user_id=user_id)
+    )
+
+
+def test_returning_session_greeting_falls_back_when_generation_fails(monkeypatch):
+    monkeypatch.setattr(
+        main_module,
+        "generate_returning_session_greeting",
+        lambda _reports: "[LLM error] service unavailable",
+    )
+
+    greeting = main_module._greeting_for_session(
+        2,
+        previous_session_reports_text="Previous report content",
+    )
+
+    assert greeting == main_module.COACH_RETURNING_SESSION_GREETING
+
+
 def test_prompt_patch_is_injected_after_first_turn(client, monkeypatch):
     auth = register_user(client, "alex@example.com")
     headers = auth_headers(auth["access_token"])
